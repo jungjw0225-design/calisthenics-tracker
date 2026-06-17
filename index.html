@@ -1089,7 +1089,11 @@ function formatShort(key) {
   return `${d.getMonth()+1}/${d.getDate()}`;
 }
 
-document.getElementById('todayBadge').textContent = formatDate(getTodayKey());
+function refreshTodayBadge() {
+  const el = document.getElementById('todayBadge');
+  if (el) el.textContent = formatDate(getTodayKey());
+}
+refreshTodayBadge();
 
 function switchTab(name, el) {
   document.querySelectorAll('.tab-content').forEach(e => e.classList.remove('active'));
@@ -1130,6 +1134,7 @@ function applyExercise() {
 }
 
 function renderActiveTab(name) {
+  refreshTodayBadge();
   const prog = CUR().type === 'program';
   if (name === 'today')        prog ? renderPullupToday()   : renderTodayCards();
   else if (name === 'roadmap') prog ? renderProgram()       : renderRoadmap();
