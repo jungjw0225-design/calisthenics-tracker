@@ -1,0 +1,2181 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<title>칼리스데닉스 트래커</title>
+<link rel="apple-touch-icon" href="icon-C.png"/>
+<link rel="icon" href="icon-C.png"/>
+<style>
+  :root {
+    --bg: #0f0f0f;
+    --surface: #1a1a1a;
+    --surface2: #242424;
+    --border: #2e2e2e;
+    --accent: #c8ff00;
+    --accent-dim: rgba(200,255,0,0.12);
+    --text: #f0f0f0;
+    --text-dim: #888;
+    --text-muted: #555;
+    --danger: #ff4444;
+    --success: #44ff88;
+    --radius: 12px;
+    --radius-sm: 8px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Pretendard', 'Apple SD Gothic Neo', -apple-system, sans-serif;
+    min-height: 100vh;
+    padding-bottom: 80px;
+    line-height: 1.6;
+    word-break: keep-all;
+    overflow-wrap: break-word;
+  }
+
+  .header {
+    padding: 24px 20px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .header-title { font-size: 20px; font-weight: 700; letter-spacing: -0.5px; }
+  .header-title span { color: var(--accent); }
+  .today-badge {
+    font-size: 12px; color: var(--text-dim);
+    background: var(--surface2); padding: 4px 10px; border-radius: 20px;
+  }
+
+  .tabs {
+    display: flex; padding: 12px 20px 0; gap: 4px;
+    border-bottom: 1px solid var(--border);
+  }
+  .tab {
+    padding: 8px 16px; font-size: 13px; font-weight: 600;
+    color: var(--text-muted); border-bottom: 2px solid transparent;
+    cursor: pointer; transition: all 0.15s; background: none;
+    border-top: none; border-left: none; border-right: none;
+  }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* 오늘 탭 */
+  .today-section { padding: 20px; }
+
+  .current-stage-selector {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px 16px; margin-bottom: 20px;
+  }
+  .current-stage-label {
+    font-size: 11px; color: var(--text-dim); margin-bottom: 8px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .stage-select {
+    width: 100%; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 8px 10px;
+    font-size: 13px; color: var(--text); outline: none; font-family: inherit;
+  }
+  .stage-select:focus { border-color: var(--accent); }
+
+  .stage-card {
+    background: var(--surface); border-radius: var(--radius);
+    border: 1px solid var(--border); margin-bottom: 12px;
+    overflow: hidden; transition: border-color 0.2s;
+  }
+  .stage-card.current { border-color: var(--accent); }
+  .stage-card.completed-today { border-color: var(--success); }
+
+  .stage-header {
+    display: flex; align-items: center; padding: 14px 16px;
+    cursor: pointer; gap: 12px;
+  }
+  .stage-num {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--surface2); display: flex; align-items: center;
+    justify-content: center; font-size: 11px; font-weight: 700;
+    color: var(--text-muted); flex-shrink: 0;
+  }
+  .stage-card.current .stage-num { background: var(--accent); color: #000; }
+  .stage-card.completed-today .stage-num { background: var(--success); color: #000; }
+
+  .stage-info { flex: 1; min-width: 0; }
+  .stage-name { font-size: 14px; font-weight: 600; margin-bottom: 2px; }
+  .stage-target { font-size: 11px; color: var(--text-dim); }
+  .stage-status { font-size: 20px; flex-shrink: 0; }
+
+  .stage-body {
+    display: none; padding: 0 16px 16px;
+    border-top: 1px solid var(--border);
+  }
+  .stage-body.open { display: block; }
+
+  .sets-label {
+    font-size: 11px; color: var(--text-dim); margin: 12px 0 8px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .sets-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+  .set-row { display: flex; align-items: center; gap: 8px; }
+  .set-label { font-size: 12px; color: var(--text-dim); width: 40px; flex-shrink: 0; }
+  .set-input {
+    flex: 1; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 7px 10px; font-size: 14px;
+    color: var(--text); outline: none; transition: border-color 0.15s;
+  }
+  .set-input:focus { border-color: var(--accent); }
+  .set-unit { font-size: 12px; color: var(--text-dim); width: 20px; flex-shrink: 0; }
+  .set-remove {
+    background: none; border: none; color: var(--text-muted);
+    font-size: 16px; cursor: pointer; padding: 4px; line-height: 1;
+  }
+  .set-remove:hover { color: var(--danger); }
+
+  .add-set-btn {
+    background: var(--surface2); border: 1px dashed var(--border);
+    border-radius: var(--radius-sm); color: var(--text-dim);
+    font-size: 12px; padding: 7px; cursor: pointer; width: 100%;
+    transition: all 0.15s;
+  }
+  .add-set-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .memo-input {
+    width: 100%; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 8px 10px; font-size: 13px;
+    color: var(--text); outline: none; resize: none; margin-top: 8px;
+    font-family: inherit; transition: border-color 0.15s; line-height: 1.6;
+  }
+  .memo-input:focus { border-color: var(--accent); }
+
+  .save-btn {
+    width: 100%; margin-top: 10px; padding: 10px;
+    background: var(--accent); color: #000; border: none;
+    border-radius: var(--radius-sm); font-size: 13px; font-weight: 700;
+    cursor: pointer; transition: opacity 0.15s;
+  }
+  .save-btn:hover { opacity: 0.85; }
+  .save-btn.saved { background: var(--success); }
+
+  /* 로드맵 탭 */
+  .roadmap-section { padding: 20px; }
+  .roadmap-item {
+    display: flex; gap: 14px; margin-bottom: 4px; position: relative;
+  }
+  .roadmap-item::before {
+    content: ''; position: absolute; left: 15px; top: 32px;
+    bottom: -4px; width: 1px; background: var(--border);
+  }
+  .roadmap-item:last-child::before { display: none; }
+  .roadmap-dot {
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--surface2); border: 2px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; color: var(--text-muted);
+    flex-shrink: 0; margin-top: 8px; z-index: 1;
+  }
+  .roadmap-item.done .roadmap-dot { border-color: var(--success); color: var(--success); }
+  .roadmap-item.current .roadmap-dot { background: var(--accent); border-color: var(--accent); color: #000; }
+  .roadmap-card {
+    flex: 1; background: var(--surface); border-radius: var(--radius);
+    border: 1px solid var(--border); padding: 12px 14px; margin-bottom: 4px;
+  }
+  .roadmap-item.current .roadmap-card { border-color: var(--accent); background: var(--accent-dim); }
+  .roadmap-item.done .roadmap-card { opacity: 0.5; }
+  .roadmap-name { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .roadmap-desc {
+    font-size: 12px; color: var(--text-dim); line-height: 1.7;
+    word-break: keep-all; overflow-wrap: break-word;
+  }
+  .roadmap-goal {
+    display: inline-block; margin-top: 6px; font-size: 10px;
+    background: var(--surface2); padding: 2px 8px; border-radius: 10px; color: var(--text-dim);
+  }
+  .roadmap-item.current .roadmap-goal { background: var(--accent); color: #000; font-weight: 700; }
+
+  /* 기록 탭 */
+  .history-section { padding: 16px 20px; }
+
+  /* 스트릭 */
+  .streak-bar {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px 16px; margin-bottom: 16px;
+    display: flex; align-items: center; gap: 14px;
+  }
+  .streak-num {
+    font-size: 36px; font-weight: 800; color: var(--accent); line-height: 1;
+    flex-shrink: 0;
+  }
+  .streak-info { flex: 1; }
+  .streak-title { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+  .streak-sub { font-size: 11px; color: var(--text-dim); line-height: 1.5; }
+
+  /* 차트 */
+  .chart-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px 16px; margin-bottom: 16px;
+  }
+  .chart-title {
+    font-size: 12px; color: var(--text-dim); margin-bottom: 12px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .chart-stage-select {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 3px 8px; font-size: 11px;
+    color: var(--text-dim); outline: none; font-family: inherit;
+  }
+  .chart-wrap { width: 100%; overflow-x: auto; }
+  svg.trend-chart { display: block; }
+
+  /* 날짜별 캘린더 도트 */
+  .cal-section { margin-bottom: 16px; }
+  .cal-label {
+    font-size: 11px; color: var(--text-muted); margin-bottom: 8px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .cal-grid {
+    display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px;
+  }
+  .cal-day-label {
+    font-size: 9px; color: var(--text-muted); text-align: center; padding: 2px 0;
+  }
+  .cal-dot {
+    aspect-ratio: 1; border-radius: 4px; background: var(--surface2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9px; color: var(--text-muted); cursor: default;
+    transition: background 0.15s;
+  }
+  .cal-dot.has-log { background: var(--accent-dim); }
+  .cal-dot.has-log.today-dot { background: var(--accent); color: #000; font-weight: 700; }
+
+  /* 기록 리스트 */
+  .history-filter {
+    display: flex; gap: 8px; margin-bottom: 14px;
+    overflow-x: auto; padding-bottom: 4px;
+  }
+  .filter-chip {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 20px; padding: 5px 12px; font-size: 12px;
+    color: var(--text-dim); cursor: pointer; white-space: nowrap; transition: all 0.15s;
+  }
+  .filter-chip.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+
+  .history-day { margin-bottom: 18px; }
+  .history-date {
+    font-size: 11px; color: var(--text-muted); margin-bottom: 8px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .history-entry {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 12px 14px; margin-bottom: 6px;
+  }
+  .history-entry-name { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+
+  /* 세트 시각화 바 */
+  .set-bars { display: flex; flex-direction: column; gap: 5px; }
+  .set-bar-row { display: flex; align-items: center; gap: 8px; }
+  .set-bar-label { font-size: 11px; color: var(--text-muted); width: 36px; flex-shrink: 0; }
+  .set-bar-track {
+    flex: 1; height: 6px; background: var(--surface2);
+    border-radius: 3px; overflow: hidden;
+  }
+  .set-bar-fill {
+    height: 100%; border-radius: 3px;
+    background: linear-gradient(90deg, var(--accent-dim), var(--accent));
+    transition: width 0.4s ease;
+  }
+  .set-bar-val { font-size: 12px; color: var(--text-dim); width: 32px; text-align: right; flex-shrink: 0; }
+
+  .history-best {
+    margin-top: 8px; font-size: 11px; color: var(--text-dim);
+  }
+  .history-best strong { color: var(--accent); }
+  .history-memo {
+    margin-top: 8px; font-size: 12px; color: var(--text-dim);
+    font-style: italic; line-height: 1.6; word-break: keep-all;
+  }
+
+  .empty-state {
+    text-align: center; padding: 60px 20px;
+    color: var(--text-muted); font-size: 14px; line-height: 2;
+  }
+  .section-divider {
+    font-size: 11px; color: var(--text-muted); margin: 16px 0 10px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+
+  /* 세트 퀄리티 / 타이머 버튼 */
+  .set-quality, .set-timer {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); font-size: 13px; cursor: pointer;
+    padding: 6px 8px; line-height: 1; flex-shrink: 0; color: var(--text-dim);
+    transition: all 0.15s;
+  }
+  .set-quality:hover, .set-timer:hover { border-color: var(--accent); }
+  .set-quality.q-clean { border-color: var(--success); }
+  .set-quality.q-shaky { border-color: #ffaa33; }
+  .set-quality.q-fail  { border-color: var(--danger); }
+  .set-timer.running { border-color: var(--danger); color: var(--danger); }
+
+  /* 자동저장 토스트 */
+  .toast {
+    position: fixed; bottom: 24px; left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--surface2); border: 1px solid var(--accent);
+    color: var(--accent); font-size: 12px; font-weight: 600;
+    padding: 8px 16px; border-radius: 20px; z-index: 100;
+    opacity: 0; pointer-events: none; transition: all 0.25s;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* 차트 지표 토글 */
+  .chart-metrics { display: flex; gap: 6px; margin-bottom: 12px; }
+  .metric-chip {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 14px; padding: 4px 10px; font-size: 11px;
+    color: var(--text-dim); cursor: pointer; transition: all 0.15s;
+    flex: 1; text-align: center;
+  }
+  .metric-chip.active {
+    background: var(--accent-dim); border-color: var(--accent);
+    color: var(--accent); font-weight: 600;
+  }
+
+  /* 주간 요약 카드 */
+  .week-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px 16px; margin-bottom: 16px;
+  }
+  .week-title { font-size: 12px; color: var(--text-dim); margin-bottom: 12px; }
+  .week-stats { display: flex; gap: 10px; margin-bottom: 6px; }
+  .week-stat {
+    flex: 1; text-align: center; background: var(--surface2);
+    border-radius: var(--radius-sm); padding: 10px 4px;
+  }
+  .week-stat-num { font-size: 22px; font-weight: 800; color: var(--accent); line-height: 1.1; }
+  .week-stat-label { font-size: 10px; color: var(--text-dim); margin-top: 4px; }
+  .week-stage-row {
+    display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 11px;
+  }
+  .week-stage-name { color: var(--text-dim); flex: 1; }
+  .week-stage-val { color: var(--text); font-weight: 600; }
+
+  /* 퀄리티 배지 (기록 탭) */
+  .q-badge { font-size: 11px; margin-left: 3px; }
+
+  /* 진급 배지 (로드맵) */
+  .roadmap-milestone {
+    display: inline-block; margin-top: 6px; margin-left: 6px; font-size: 10px;
+    background: var(--success); color: #000; padding: 2px 8px;
+    border-radius: 10px; font-weight: 700;
+  }
+
+  /* 데이터 백업 */
+  .backup-section { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border); }
+  .backup-label {
+    font-size: 11px; color: var(--text-muted); margin-bottom: 10px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .backup-btns { display: flex; gap: 8px; }
+  .backup-btn {
+    flex: 1; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); color: var(--text-dim); font-size: 12px;
+    padding: 10px; cursor: pointer; transition: all 0.15s; font-family: inherit;
+  }
+  .backup-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* 클라우드(Firebase) 로그인 바 */
+  .cloud-bar {
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    padding:8px 20px; border-bottom:1px solid var(--border); font-size:12px;
+  }
+  #cloudStatus { color:var(--text-dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .cloud-btn {
+    background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm);
+    color:var(--text-dim); font-size:11px; font-weight:600; padding:5px 12px;
+    cursor:pointer; font-family:inherit; flex-shrink:0; transition:all .15s;
+  }
+  .cloud-btn:hover { border-color:var(--accent); color:var(--accent); }
+
+  /* 종목 전환 스위처 */
+  .mode-switch { display:flex; gap:6px; padding:12px 20px 0; }
+  .mode-btn {
+    flex:1; background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--radius-sm); color:var(--text-dim); font-size:13px;
+    font-weight:700; padding:9px; cursor:pointer; font-family:inherit; transition:all .15s;
+  }
+  .mode-btn.active { background:var(--accent-dim); border-color:var(--accent); color:var(--accent); }
+
+  /* 풀업: 오늘 진행 바 / 설정 */
+  .pu-daybar {
+    background:var(--surface); border:1px solid var(--accent);
+    border-radius:var(--radius); padding:14px 16px; margin-bottom:16px;
+    display:flex; align-items:center; gap:14px;
+  }
+  .pu-daynum { font-size:30px; font-weight:800; color:var(--accent); line-height:1; flex-shrink:0; }
+  .pu-dayinfo { flex:1; min-width:0; }
+  .pu-daytitle { font-size:14px; font-weight:700; margin-bottom:2px; }
+  .pu-daysub { font-size:11px; color:var(--text-dim); line-height:1.5; }
+  .pu-setting {
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--radius); padding:12px 16px; margin-bottom:16px;
+    display:flex; align-items:center; gap:10px;
+  }
+  .pu-setting label { font-size:12px; color:var(--text-dim); flex:1; }
+  .pu-setting input {
+    width:70px; background:var(--surface2); border:1px solid var(--border);
+    border-radius:var(--radius-sm); padding:7px 10px; font-size:14px;
+    color:var(--text); outline:none; text-align:center; font-family:inherit;
+  }
+  .pu-setting input:focus { border-color:var(--accent); }
+
+  /* 풀업: 세트 입력 행 */
+  .pu-set-row { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+  .pu-set-label { font-size:12px; color:var(--text-dim); width:44px; flex-shrink:0; }
+  .pu-target {
+    font-size:11px; color:var(--accent); background:var(--accent-dim);
+    border-radius:10px; padding:3px 8px; flex-shrink:0; min-width:52px; text-align:center;
+  }
+  .pu-input {
+    flex:1; background:var(--surface2); border:1px solid var(--border);
+    border-radius:var(--radius-sm); padding:7px 10px; font-size:14px;
+    color:var(--text); outline:none;
+  }
+  .pu-input:focus { border-color:var(--accent); }
+  .pu-rest-card {
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--radius); padding:28px 16px; margin-bottom:12px; text-align:center;
+  }
+  .pu-rest-emoji { font-size:40px; }
+  .pu-rest-text { font-size:14px; color:var(--text-dim); margin-top:8px; line-height:1.7; }
+
+  /* 풀업: 30일 프로그램 그리드 */
+  .pu-prog-row {
+    display:flex; align-items:center; gap:12px;
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--radius-sm); padding:10px 14px; margin-bottom:6px;
+  }
+  .pu-prog-row.current { border-color:var(--accent); background:var(--accent-dim); }
+  .pu-prog-row.rest { opacity:0.5; }
+  .pu-prog-day { font-size:12px; font-weight:700; color:var(--text-dim); width:54px; flex-shrink:0; }
+  .pu-prog-row.current .pu-prog-day { color:var(--accent); }
+  .pu-prog-reps { font-size:14px; font-weight:600; letter-spacing:1px; }
+  .pu-prog-rest-label { font-size:12px; color:var(--text-muted); }
+
+  /* 풀업: 기록 세트 표시 */
+  .pu-hist-sets { display:flex; flex-wrap:wrap; gap:10px; }
+  .pu-hist-set { font-size:12px; color:var(--text); display:flex; align-items:center; gap:3px; }
+
+  /* 로드맵 상세 (12단계 + 드릴/목표/실수) */
+  .principles-box {
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--radius); padding:14px 16px; margin-bottom:16px;
+  }
+  .principles-title { font-size:12px; font-weight:700; color:var(--accent); margin-bottom:8px; }
+  .principles-box ul { margin:0; padding-left:16px; }
+  .principles-box li { font-size:11.5px; color:var(--text-dim); line-height:1.7; margin-bottom:5px; word-break:keep-all; }
+  .principles-box li b { color:var(--text); font-weight:600; }
+  .roadmap-kind {
+    display:inline-block; font-size:9px; font-weight:700;
+    background:var(--surface2); color:var(--text-dim);
+    padding:2px 7px; border-radius:8px; margin-left:6px; vertical-align:middle;
+  }
+  .roadmap-item.current .roadmap-kind { background:var(--accent); color:#000; }
+  .roadmap-sec-label {
+    font-size:10px; color:var(--text-muted); text-transform:uppercase;
+    letter-spacing:0.5px; margin:10px 0 4px;
+  }
+  .roadmap-drills { margin:0 0 4px; padding-left:16px; }
+  .roadmap-drills li { font-size:11.5px; color:var(--text-dim); line-height:1.6; margin-bottom:3px; word-break:keep-all; }
+  .roadmap-target { font-size:12px; color:var(--text); line-height:1.6; margin-bottom:6px; word-break:keep-all; }
+  .roadmap-mistake {
+    font-size:11.5px; color:var(--text-dim); line-height:1.6;
+    margin-bottom:8px; word-break:keep-all; font-style:italic;
+  }
+</style>
+</head>
+<body>
+
+<div id="demoBanner" style="background:#1a1800;border-bottom:1px solid #c8ff0033;padding:8px 20px;font-size:12px;color:#c8ff0099;display:flex;align-items:center;justify-content:space-between;">
+  <span>👁 예시 데이터로 보는 중</span>
+  <button onclick="clearDemo()" style="background:none;border:1px solid #c8ff0044;border-radius:6px;color:#c8ff0088;font-size:11px;padding:3px 8px;cursor:pointer;">초기화 후 시작</button>
+</div>
+<div class="header">
+  <div class="header-title" id="headerTitle">칼리스데닉스 <span>트래커</span></div>
+  <div class="today-badge" id="todayBadge"></div>
+</div>
+
+<div class="cloud-bar" id="cloudBar">
+  <span id="cloudStatus">☁ 로컬 저장 중</span>
+  <button class="cloud-btn" id="cloudBtn" onclick="cloudSignIn && cloudSignIn()">Google 로그인</button>
+</div>
+
+<div class="mode-switch" id="exerciseSwitch"></div>
+
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('today', this)">오늘</button>
+  <button class="tab" id="tab-btn-roadmap" onclick="switchTab('roadmap', this)">로드맵</button>
+  <button class="tab" onclick="switchTab('history', this)">기록</button>
+</div>
+
+<div id="tab-today" class="tab-content active">
+  <div id="today-planche">
+    <div class="today-section">
+      <div class="current-stage-selector">
+        <div class="current-stage-label">현재 훈련 단계</div>
+        <select class="stage-select" id="currentStageSelect" onchange="saveCurrentStage()"></select>
+      </div>
+      <div id="stageCards"></div>
+    </div>
+  </div>
+  <div id="today-pullup" class="today-section" style="display:none"></div>
+</div>
+
+<div id="tab-roadmap" class="tab-content">
+  <div class="roadmap-section" id="roadmapList"></div>
+  <div id="program-pullup" class="roadmap-section" style="display:none"></div>
+</div>
+
+<div id="tab-history" class="tab-content">
+  <div class="history-section">
+    <div id="history-planche">
+      <div id="weekCard"></div>
+      <div id="streakBar"></div>
+      <div class="chart-card">
+        <div class="chart-title">
+          <span id="chartTitleText">최고 기록 트렌드</span>
+          <select class="chart-stage-select" id="chartStageSelect" onchange="renderChart()"></select>
+        </div>
+        <div class="chart-metrics" id="chartMetrics"></div>
+        <div class="chart-wrap" id="chartWrap"></div>
+      </div>
+      <div class="cal-section">
+        <div class="cal-label">이번 달 운동 현황</div>
+        <div id="calGrid"></div>
+      </div>
+      <div class="section-divider">전체 기록</div>
+      <div class="history-filter" id="historyFilter"></div>
+      <div id="historyList"></div>
+    </div>
+    <div id="history-pullup" style="display:none"></div>
+
+    <div class="backup-section">
+      <div class="backup-label">설정</div>
+      <div class="pu-setting">
+        <label>하루 마감 시간</label>
+        <select class="stage-select" id="dayEndSelect" style="width:auto;flex:0 0 auto;min-width:140px" onchange="setDayEndHour(this.value)">
+          <option value="0">자정 (기본)</option>
+          <option value="1">오전 1시</option>
+          <option value="2">오전 2시</option>
+          <option value="3">오전 3시</option>
+          <option value="4">오전 4시</option>
+          <option value="5">오전 5시</option>
+          <option value="6">오전 6시</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="backup-section">
+      <div class="backup-label">데이터 백업 (플란체+풀업 전체)</div>
+      <div class="backup-btns">
+        <button class="backup-btn" onclick="exportData()">⬇ JSON 내보내기</button>
+        <button class="backup-btn" onclick="document.getElementById('importFile').click()">⬆ JSON 가져오기</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<input type="file" id="importFile" accept="application/json" style="display:none" onchange="importData(this)">
+
+<script>
+// 플란체 12단계 로드맵 — 권위 출처(Overcoming Gravity·FitnessFAQs·GMB·Calisthenics Association 등) 종합 + 적대 검증
+// (현재 운동의 설정으로 syncExerciseConfig()에서 재바인딩되므로 let)
+let STAGES = [
+  { id:1, name:"손목·견갑 컨디셔닝", nameEn:"Wrist & Scapular Prep", kind:"기초", unit:"초", goalTarget:"손목 5분·할로우 45초",
+    desc:"체중을 곧은 팔에 싣기 전 손목·어깨뼈(견갑)를 적응시키는 사전 준비.",
+    drills:[
+      "손목 워밍업 5~10분(린·신전·회전·핑거 푸시업) — 매 세션 전 필수",
+      "견갑 푸시업(프로트랙션 강조) 3세트 ×12~15회",
+      "할로우바디 홀드 30~45초 · 직완 플랭크 3세트 ×30초",
+      "고관절 내전근·햄스트링 유연성 저강도 병행 (스트래들 대비 미리 시작!)"],
+    advanceTarget:"통증 없는 손목 준비 5분 + 견갑 푸시업 10회 클린 + 할로우바디 45초.",
+    commonMistake:"손목 준비를 건너뛰고 바로 하중 싣기. 손목 부상의 대다수가 준비 부족·조급함에서 온다." },
+  { id:2, name:"프로그 스탠드", nameEn:"Frog Stand", kind:"지지", unit:"초", goalTarget:"연속 30초",
+    desc:"무릎을 팔꿈치 안쪽에 얹고 발을 띄워 전방 균형을 익히는 첫 지지 자세.",
+    drills:[
+      "프로그 스탠드 균형(발 띄우기) — 워밍업 초반 5~10분에 연습",
+      "max hold 여러 세트, 목표 연속 30초",
+      "플란체 린 도입(어깨를 손목 앞으로) 5~10초 ×4~5세트",
+      "내전근 유연성 계속 병행"],
+    advanceTarget:"흔들림 없이 연속 30초 + 손목 컨디셔닝 확보.",
+    commonMistake:"균형(스킬)을 지친 상태에서 연습. 균형은 피로 전 세션 초반에." },
+  { id:3, name:"직완 프로그 스탠드", nameEn:"Straight-Arm Frog Stand", kind:"지지", unit:"초", goalTarget:"직완 6초",
+    desc:"팔꿈치를 무릎 위로 옮기고 팔을 완전히 펴(직완) 버티는, 직완 포지션의 첫 도입.",
+    drills:[
+      "직완 프로그: 팔꿈치 완전 락아웃, 최대의 60~70% 강도 ×4~5세트",
+      "직완 프로그 네거티브(직완→천천히 굽은 프로그) — 굽은팔→직완 전환 다리",
+      "플란체 린 심화 5~10초 ×4~5세트",
+      "슈도 플란체 푸쉬업(PPPU) 기초 3~5세트 ×8~15회"],
+    advanceTarget:"팔을 굽히지 않고(직완) 6초 클린. 굽은팔↔직완은 이두 건 부하가 달라 보수적으로.",
+    commonMistake:"락아웃이 무너진 채로 버티기. 무너지면 직완 포지션부터 다시 만든다." },
+  { id:4, name:"플란체 린", nameEn:"Planche Lean", kind:"린·근력", unit:"초", goalTarget:"깊은 린 10~15초",
+    desc:"어깨를 손목보다 앞으로 기울여 직완 압박 근력을 쌓는, 가장 중요한 근력 도구.",
+    drills:[
+      "기본 린: 손 45도 바깥, 견갑 프로트랙션, 둔근 조임",
+      "점진 린: 힙 높이 30초 → 힙 넘김 20초 → 힙 크리스 15초 (주 단위로 천천히)",
+      "린 홀드 10초 → 세션당 1~2초씩 증가, 3세트, 주 3회"],
+    advanceTarget:"깊은 각도(힙 크리스) 린 10~15초 클린. 얕은 린으로 시간만 채우지 말 것.",
+    commonMistake:"폼이 무너지며 어깨만 더 밀기 / 각도를 너무 빨리 늘리기 — 정체·부상 주원인." },
+  { id:5, name:"슈도 플란체 푸쉬업(PPPU)", nameEn:"Pseudo Planche Push-Up", kind:"린·근력", unit:"회", goalTarget:"깊은 PPPU 8~10×3",
+    desc:"손을 허리 쪽에 두고 전방 기울인 푸시업. 매 렙마다 '공짜' 플란체 아이소를 얻는 동적 근력.",
+    drills:[
+      "PPPU: 손을 아랫갈비~허리 높이, 발 어깨높이, 정점 1~2초 홀드",
+      "3세트 ×5~10회, 주 3~4회 (연속일 회피, 회복일 확보)",
+      "3초 네거티브 + 폭발적 상승 강조"],
+    advanceTarget:"깊은 ROM PPPU(아랫갈비 높이) 3세트 ×8~10회, 어깨가 손목보다 앞선 상태.",
+    commonMistake:"PPPU 생략. 정적 버티기만으론 플란체에 잘 안 듣는다 — 동적 보강은 필수." },
+  { id:6, name:"지지 크레인(점진적 지지 감소)", nameEn:"Supported Crane", kind:"브릿지", unit:"초", goalTarget:"한쪽 무릎 띄우기",
+    desc:"지지 요소를 하나씩 제거해 '지지→무지지' 간극을 메우는 결정적 브릿지.",
+    drills:[
+      "턱 홀드(어깨 디프레션) 5~15초로 기본 하중 적응",
+      "레이즈드 풋 크레인 → 풀 크레인(발 공중, 무릎은 팔 지지)",
+      "원 플로팅 니: 한쪽 무릎만 띄워 교대 — 지지 절반 제거 핵심 드릴",
+      "턱 플란체 펄스 5~10회: 지지↔무지지 동적 적응"],
+    advanceTarget:"풀 크레인 안정 + 한쪽 무릎 띄우기 + 펄스에서 양 무릎이 잠깐 뜨기.",
+    commonMistake:"이 브릿지를 건너뛰고 프로그→무지지 턱으로 점프 — 가장 흔한 좌절 지점." },
+  { id:7, name:"턱 플란체", nameEn:"Tuck Planche", kind:"무지지", unit:"초", goalTarget:"클린 10초+네거티브",
+    desc:"양 무릎을 팔에서 완전히 띄우고 가슴으로 당긴 첫 정식(무지지) 플란체.",
+    drills:[
+      "턱 홀드 4세트 ×10~15초 (엉덩이 어깨높이·견갑 프로트랙션·팔 락)",
+      "턱 네거티브 5~8초 통제 ×3~4 — 못 버티는 구간 보충",
+      "턱 PPPU 3세트 ×8~10 병행",
+      "정체 시 아이소 60~70% ×4~5세트"],
+    advanceTarget:"클린 10초 게이트 + 어드밴스드 턱 네거티브 5~8초 통제 + 턱 PPPU 8회. (긴 홀드는 부차 지표.)",
+    commonMistake:"긴 버티기 지구력에 집착. 긴 턱 홀드는 다음 단계 전이가 적다 — 폼·직완 근력 우선." },
+  { id:8, name:"어드밴스드 턱 플란체", nameEn:"Advanced Tuck Planche", kind:"무지지", unit:"초", goalTarget:"12~15초 ×3",
+    desc:"무릎을 가슴에서 떼고 등을 평평하게 펴 레버암(난이도)을 키운 자세.",
+    drills:[
+      "어드밴스드 턱 홀드: 5초→10초→15초(주차별), 5~6세트, 골반 후방경사 유지",
+      "어드밴스드 턱 푸시업 5회+ 통제",
+      "네거티브 5초 하강 ×3~4",
+      "내전근 유연성 본격화 — 스트래들 선행 준비"],
+    advanceTarget:"12~15초 ×3세트 + 홀드 중 다리 약간 벌리기 시작 가능 + 푸시업 5회+. 이 단계 2~3개월 체류 권장.",
+    commonMistake:"골반 후방경사·둔근/코어 텐션 놓침 → 레버 부하가 어깨로 집중." },
+  { id:9, name:"원레그 플란체", nameEn:"One-Leg Planche", kind:"브릿지", unit:"초", goalTarget:"밴드보조 스트래들 5~8초",
+    desc:"한 다리는 턱, 다른 다리는 신전. 어드밴스드 턱↔스트래들의 최대 레버 점프를 메우는 가교.",
+    drills:[
+      "원-레그 익스텐션(양쪽 교대) — 비대칭 하중 적응",
+      "레그 익스텐션 턱↔스트래들 5~8회, 신전 정점 2초 홀드",
+      "밴드 보조 스트래들 4세트 ×8~12초 (점진 감소)",
+      "고관절 내전근 유연성 90→120도"],
+    advanceTarget:"원레그 안정 홀드 + 밴드보조 스트래들 5~8초 + 스트래들 린 15초.",
+    commonMistake:"어드밴스드 턱→스트래들 직행. 진행 중 최대 점프이니 원레그·밴드로 쪼갤 것." },
+  { id:10, name:"스트래들 플란체", nameEn:"Straddle Planche", kind:"무지지", unit:"초", goalTarget:"10~15초 ×3",
+    desc:"다리를 넓게 벌려 레버를 짧게 한 수평 플란체. 폭을 좁히는 것이 곧 점진적 과부하.",
+    drills:[
+      "스트래들 홀드 3~5초→10초→15초+(주차별), 5~6세트, 60~70% 강도",
+      "스트래들 네거티브 7~10초 통제",
+      "내로우 스트래들 3세트 ×3~5초로 다리 모으기 점진",
+      "고관절 유연성·둔근/코어(다리 처짐 방지) 병행"],
+    advanceTarget:"무보조 스트래들 10~15초 ×3세트 + 다리 처짐 없음 + 폭 좁히기 진행.",
+    commonMistake:"정체를 근력 탓만. 실제 병목은 고관절 유연성·코어(다리 처짐). 다수가 여기서 멈춘다." },
+  { id:11, name:"하프 레이 플란체", nameEn:"Half-Lay Planche", kind:"무지지", unit:"초", goalTarget:"8초+ ×3",
+    desc:"다리를 모으되 엉덩이를 약간 파이크해 레버를 살짝 줄인, 풀 직전 단계.",
+    drills:[
+      "하프 레이 홀드 3세트+ × max, 목표 8초+",
+      "파이크 각도 점진 축소: 15도 → 10도 → 5도",
+      "내로우 스트래들 병행으로 다리 모으는 근력 축적",
+      "하프 레이/풀 네거티브 7~10초 통제"],
+    advanceTarget:"하프 레이 8초+ ×3세트 + 파이크를 5도까지 줄여 유지.",
+    commonMistake:"파이크 각도를 한 번에 크게 줄이기. 15→10→5도로 단계적으로." },
+  { id:12, name:"풀 플란체", nameEn:"Full Planche", kind:"무지지", unit:"초", goalTarget:"정지 5초+",
+    desc:"다리를 모으고 발끝까지 일직선 수평을 만든, 최고 난도의 직완 정적 기술.",
+    drills:[
+      "풀 플란체 홀드 5세트 ×5~10초 (폼 우선), 전신 텐션",
+      "풀 네거티브 7~10초 통제(핸드스탠드/스트래들에서)",
+      "밴드 보조 풀 → 무보조, 스트래들 폭을 좁혀 수렴",
+      "(상급) 플란체 푸시업으로 근력 잉여 확보"],
+    advanceTarget:"무보조 정지 홀드 5초+ 일관되게(직완·완전 프로트랙션·바디라인). 이후 말테제 등 확장.",
+    commonMistake:"폼을 희생해 시간 늘리기. '폼 5초 &gt; 폼 나쁜 15초'. 풀 플란체는 수년 단위 프로젝트임을 받아들일 것." }
+];
+
+// 로드맵 핵심 원칙 (검증된 합의)
+let PLANCHE_PRINCIPLES = [
+  "<b>직완(곧은 팔)이 생명</b> — 팔꿈치 락아웃이 무너지면 다음 단계로 가지 말고 직완 포지션부터 다시.",
+  "<b>지구력 아니라 근력·레버리지</b> — 60초 같은 목표는 폐기. 진급은 시간 채우기가 아니라 폼 유지 기준(아이소 6~15초·네거티브 통제)으로 판단.",
+  "<b>정적 버티기만으론 안 됨</b> — 플란체엔 정적 홀드 효과가 약하다(Steven Low). 플란체 린 + PPPU + 네거티브를 절대 빼지 말 것.",
+  "<b>지지→무지지 간극은 3갈래로</b> — ①린 점진 ②지지 하나씩 제거 ③네거티브·PPPU로 근력 선충전.",
+  "<b>손목 준비가 안전 1순위</b> — 매 세션 전 손목 워밍업 5분. 고관절 유연성은 초반부터 미리 시작(스트래들 병목 예방).",
+  "<b>현실 직시</b> — 풀 플란체는 다수가 끝내 못 가는 수년 프로젝트. 각도는 주 단위로 천천히, 3~4주마다 디로드."
+];
+
+// 러시안 파이터 풀업 — 수준별 프로그램
+// 3/5/15/25RM은 같은 "파동" 구조(감소폭 d, 주당 증가 inc만 다름)를 파일에서 분석해 일반화.
+// 검증: 생성기가 철봉 운동 플랜.xlsx의 5RM 30일 전체 + 15/25RM 기재값과 정확히 일치.
+
+// 3RM: 초보자용 12일 브릿지(불규칙 — 초반 4세트). 파일 그대로.
+const PULLUP_3RM = [
+  [3,2,1,1],[3,2,1,1],[3,2,2,1],[3,3,2,1],[4,3,2,1], null,
+  [4,3,2,1,1],[4,3,2,2,1],[4,3,3,2,1],[4,4,3,2,1],[5,4,3,2,1], null
+];
+
+// 5세트 파동 생성기: top(첫세트), d(감소폭), inc(주당 top 증가), weeks(주차 수)
+function puGenProgram(top0, d, inc, weeks) {
+  const prog = [];
+  for (let w = 0; w < weeks; w++) {
+    const top = top0 + w * inc;
+    const base = [0,1,2,3,4].map(i => top - i * d);
+    for (let j = 1; j <= 5; j++) {
+      prog.push([1,2,3,4,5].map(p => base[p-1] + ((p > 1 && j >= 7 - p) ? d : 0)));
+    }
+    prog.push(null); // 휴식일
+  }
+  return prog;
+}
+
+// 극초보(1개도 못 하는 사람)용 단계 진행 — 첫 풀업까지의 로드맵
+let PULLUP_BEGINNER = [
+  { id:1, name:'데드행 (매달리기)', target:'30초', unit:'초',
+    desc:'팔을 곧게 펴고 바에 매달려 버티기.\n그립·어깨를 준비하는 기초. 30초까지 늘린다.' },
+  { id:2, name:'스캐퓰러 풀', target:'5회 (5~10초)', unit:'회',
+    desc:'매달린 채 팔은 편 상태로 어깨만 아래·뒤로 끌어내려 등을 활성화.\n5~10초 유지 × 5회.' },
+  { id:3, name:'네거티브 풀업', target:'5회 (천천히 3~5초)', unit:'회',
+    desc:'점프해서 턱이 바 위로 간 자세에서 최대한 천천히 내려오기.\n3~5초에 걸쳐 내려오기 × 5회.' },
+  { id:4, name:'밴드 보조 풀업', target:'3세트 × 8회', unit:'회',
+    desc:'밴드로 보조받아 풀업. 익숙해지면 점점 약한 밴드로.\n8회 × 3세트.' },
+  { id:5, name:'첫 풀업 1개! 🎉', target:'1회 → 3RM 졸업', unit:'회',
+    desc:'보조 없이 1개를 성공하면 수준을 3RM으로 올려\n정식 프로그램을 시작하세요.' }
+];
+
+// 수준 정의: 극초보(단계형) + RM 등급(파동 그리드형)
+let PULLUP_TIERS = {
+  '극초보': { kind:'beginner', label:'극초보 (0개)' },
+  '3RM':    { kind:'grid', label:'3RM (3개)',   cycle: PULLUP_3RM },
+  '5RM':    { kind:'grid', label:'5RM (5개)',   top0:5,  d:1, inc:1 },
+  '15RM':   { kind:'grid', label:'15RM (15개)', top0:12, d:2, inc:2 },
+  '25RM':   { kind:'grid', label:'25RM (25개)', top0:20, d:4, inc:2 }
+};
+let PULLUP_LEVELS = ['극초보','3RM','5RM','15RM','25RM'];
+
+function puGetTier(level) { return PULLUP_TIERS[level] || PULLUP_TIERS['5RM']; }
+
+// ════════════ 운동 레지스트리 (운동 추가 = 여기에 항목 추가) ════════════
+// type:'skill'  → 단계 로드맵형 (플란체 등). stages/principles 제공.
+// type:'program'→ 렙 프로그램형 (풀업 등). tiers/levels/beginner 제공.
+const EXERCISES = [
+  { id:'planche', name:'플란체', icon:'🤸', type:'skill',
+    midLabel:'로드맵', stages: STAGES, principles: PLANCHE_PRINCIPLES },
+  { id:'pullup', name:'러시안 파이터 풀업', icon:'💪', type:'program',
+    midLabel:'프로그램', tiers: PULLUP_TIERS, levels: PULLUP_LEVELS, beginner: PULLUP_BEGINNER }
+];
+function CUR() { return EXERCISES.find(e => e.id === data.currentExercise) || EXERCISES[0]; }
+
+// 현재 운동의 설정을 전역 상수에 재바인딩 (엔진 코드는 기존 전역명을 그대로 사용)
+function syncExerciseConfig() {
+  const ex = CUR();
+  if (ex.type === 'skill') {
+    STAGES = ex.stages; PLANCHE_PRINCIPLES = ex.principles;
+  } else if (ex.type === 'program') {
+    PULLUP_TIERS = ex.tiers; PULLUP_LEVELS = ex.levels; PULLUP_BEGINNER = ex.beginner;
+  }
+}
+
+// data 객체에 운동별 상태로 라우팅하는 프록시 게터 설치
+// (기존 data.currentStage / data.logs / data.pullup.* 참조가 현재 운동 상태를 가리킴)
+function installAccessors(d) {
+  const cur = () => d.exercises[d.currentExercise];
+  ['currentStage','logs','milestones','level','day','beginnerStage'].forEach(k => {
+    Object.defineProperty(d, k, { configurable:true, get(){ return cur()[k]; }, set(v){ cur()[k] = v; } });
+  });
+  Object.defineProperty(d, 'pullup', { configurable:true,
+    get(){ return cur(); }, set(v){ d.exercises[d.currentExercise] = v; } });
+}
+
+// 종목 스위처 버튼을 레지스트리에서 렌더
+function renderSwitcher() {
+  document.getElementById('exerciseSwitch').innerHTML = EXERCISES.map(e =>
+    `<button class="mode-btn ${e.id===data.currentExercise?'active':''}" data-ex="${e.id}" onclick="setExercise('${e.id}')">${e.icon} ${e.name}</button>`
+  ).join('');
+}
+// 현재 수준의 일자별 프로그램 배열(그리드형). 생성 결과는 캐시.
+function puProgramFor(level) {
+  const tier = puGetTier(level);
+  if (tier.kind === 'beginner') return null;
+  if (tier.cycle) return tier.cycle;
+  if (!tier._gen) {
+    // 저강도 등급(5RM 등 inc=1)은 8주(48일)까지 이어가 상위 등급으로의 '다리' 역할.
+    // 고강도(15/25RM)는 5주(30일) 기본.
+    const weeks = tier.inc === 1 ? 8 : 5;
+    tier._gen = puGenProgram(tier.top0, tier.d, tier.inc, weeks);
+  }
+  return tier._gen;
+}
+
+// 데모 데이터 생성 함수 (localStorage 비어있을 때만)
+function generateDemoData() {
+  const today = new Date();
+  const logs = {};
+
+  function addLog(daysAgo, entries) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - daysAgo);
+    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    logs[key] = entries.map(([stageId, vals, memo]) => ({
+      stageId,
+      // 마지막 세트는 보통 폼이 약간 무너지므로 '흔들림'으로 표시 (퀄리티 기능 데모)
+      sets: vals.map((v, i) => ({
+        value: String(v),
+        quality: i === vals.length - 1 ? 'shaky' : 'clean'
+      })),
+      memo: memo || ''
+    }));
+  }
+
+  // 5주치 데이터 - 날짜 하나에 stageId별로 묶어서 추가
+  // 프로그스탠드(2): 13초 → 29초 점진 상승
+  // 플란체 린(1): 18초 → 34초 점진 상승
+  // 주 4일 운동, 가끔 쉬는 날 포함
+
+  addLog(35, [[2, [13, 12, 11], '처음 시작'], [1, [18, 17, 16], '']]);
+  addLog(33, [[2, [13, 14, 13], ''], [1, [19, 18, 18], '']]);
+  addLog(31, [[2, [14, 13, 14], '손목 좀 불편함'], [1, [20, 19, 20], '']]);
+  addLog(29, [[2, [15, 15, 14], ''], [1, [20, 21, 20], '']]);
+  // 28일 전: 휴식
+  addLog(27, [[2, [15, 16, 15], ''], [1, [21, 22, 21], '']]);
+  addLog(25, [[2, [16, 17, 16], '조금씩 느는 것 같다'], [1, [22, 22, 23], '']]);
+  addLog(23, [[2, [17, 16, 17], ''], [1, [23, 24, 22], '']]);
+  addLog(21, [[2, [18, 18, 17], ''], [1, [24, 23, 24], '']]);
+  // 20일 전: 휴식
+  addLog(19, [[2, [18, 19, 18], ''], [1, [25, 25, 24], '']]);
+  addLog(17, [[2, [19, 20, 19], '20초 근접!'], [1, [26, 25, 26], '']]);
+  addLog(15, [[2, [20, 21, 20], '드디어 20초!'], [1, [26, 27, 26], '']]);
+  addLog(13, [[2, [21, 20, 22], ''], [1, [27, 28, 27], '']]);
+  // 12일 전: 휴식
+  addLog(11, [[2, [22, 22, 21], ''], [1, [28, 29, 28], '']]);
+  addLog(9,  [[2, [23, 24, 22], ''], [1, [29, 30, 29], '']]);
+  addLog(7,  [[2, [24, 23, 25], '25초 첫 돌파!'], [1, [30, 31, 30], '']]);
+  addLog(5,  [[2, [25, 26, 24], ''], [1, [31, 32, 31], '']]);
+  // 4일 전: 휴식
+  addLog(3,  [[2, [26, 27, 26], ''], [1, [32, 33, 32], '']]);
+  addLog(2,  [[2, [27, 28, 27], ''], [1, [33, 34, 33], '']]);
+  addLog(1,  [[2, [28, 29, 28], '내일 30초 가보자'], [1, [34, 33, 34], '']]);
+
+  // ── 풀업 데모: 5RM 프로그램 Day1부터 진행 ──
+  const pulogs = {};
+  let pday = 1;
+  const demoProg = puProgramFor('5RM');
+  for (let ago = 16; ago >= 2; ago--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - ago);
+    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const base = demoProg[pday-1];
+    if (base === null) {
+      pulogs[key] = { day: pday, rest: true, done: true, memo: '' };
+    } else {
+      pulogs[key] = {
+        level: '5RM', day: pday, rest: false, done: true, passed: true, advanced: true,
+        memo: ago === 16 ? '러시안 파이터 풀업 시작!' : '',
+        sets: base.map((v, i) => ({
+          target: v,
+          value: String(v),
+          quality: i === base.length-1 ? 'shaky' : 'clean'
+        }))
+      };
+    }
+    pday = pday >= demoProg.length ? 1 : pday + 1;
+  }
+
+  return {
+    currentExercise: 'planche',
+    exercises: {
+      planche: { currentStage: 2, logs, milestones: [] },
+      pullup: { level: '5RM', day: pday, beginnerStage: 1, logs: pulogs }
+    },
+    isDemo: true
+  };
+}
+
+let data, isDemo = false;
+let dayEndHour = 0;
+try {
+  const saved = localStorage.getItem('planche_data');
+  if (saved) { data = JSON.parse(saved); }
+  else { data = generateDemoData(); isDemo = true; }
+} catch (e) {
+  // localStorage 비활성화 환경 → 데모 데이터(메모리 전용)로 동작
+  data = generateDemoData(); isDemo = true;
+}
+function freshPlanche() { return { currentStage: 1, logs: {}, milestones: [] }; }
+function freshPullup()  { return { level: '5RM', day: 1, beginnerStage: 1, logs: {} }; }
+
+function normalizeData() {
+  // 구버전(평면 mode/currentStage/logs/pullup) → 신버전(exercises) 마이그레이션
+  if (!data.exercises) {
+    data = {
+      currentExercise: data.mode || 'planche',
+      exercises: {
+        planche: { currentStage: data.currentStage || 2, logs: data.logs || {}, milestones: data.milestones || [] },
+        pullup: data.pullup || {}
+      },
+      updatedAt: data.updatedAt || 0
+    };
+  }
+  if (!data.currentExercise || !EXERCISES.find(e => e.id === data.currentExercise)) data.currentExercise = 'planche';
+  if (!data.exercises) data.exercises = {};
+  // 운동별 상태 기본값
+  const p = data.exercises.planche = data.exercises.planche || {};
+  if (!p.currentStage) p.currentStage = 2;
+  if (!p.logs) p.logs = {};
+  if (!p.milestones) p.milestones = [];
+  const u = data.exercises.pullup = data.exercises.pullup || {};
+  if (!u.level || !PULLUP_TIERS[u.level]) u.level = '5RM';
+  if (!u.day) u.day = 1;
+  if (!u.logs) u.logs = {};
+  if (!u.beginnerStage) u.beginnerStage = 1;
+  if (!data.settings) data.settings = {};
+  dayEndHour = data.settings.dayEndHour || 0;
+  installAccessors(data);
+  syncExerciseConfig();
+}
+normalizeData();
+
+let activeTab = 'today';
+let historyFilter = 0;
+
+// ── 클라우드(Firebase) 연동 브리지: 모듈 스크립트에서 data/탭에 접근하기 위함 ──
+window.getAppData = () => data;
+window.setAppData = (d) => { data = d; normalizeData(); };
+window.getActiveTab = () => activeTab;
+window.clearDemoFlag = () => { isDemo = false; };
+window.isDemoActive = () => isDemo;
+window.startFresh = () => {
+  const prevDayEndHour = dayEndHour; // 기기 마감시간 설정은 초기화 시에도 보존
+  data = {
+    currentExercise: data.currentExercise || 'planche',
+    exercises: { planche: freshPlanche(), pullup: freshPullup() },
+    settings: { dayEndHour: prevDayEndHour },
+    updatedAt: 0
+  };
+  normalizeData();
+  isDemo = false;
+};
+let chartMetric = 'best';
+let saveTimer = null, toastTimer = null;
+const timers = {};
+
+function saveData() {
+  data.updatedAt = Date.now();
+  try { localStorage.setItem('planche_data', JSON.stringify(data)); } catch (e) {}
+  if (window.cloudSave) window.cloudSave();
+}
+
+// 자동저장: 입력 변경 시 debounce 500ms 후 저장
+function autoSave() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => { saveData(); showToast('자동저장됨 ✓'); }, 500);
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 1500);
+}
+
+function clearDemo() {
+  if (confirm('예시 데이터를 지우고 새로 시작할까요? (모든 운동 초기화)')) {
+    const prevDayEndHour = dayEndHour; // 기기 마감시간 설정은 초기화 시에도 보존
+    data = {
+      currentExercise: data.currentExercise || 'planche',
+      exercises: { planche: freshPlanche(), pullup: freshPullup() },
+      settings: { dayEndHour: prevDayEndHour },
+      updatedAt: 0
+    };
+    normalizeData();
+    isDemo = false;
+    saveData();
+    document.getElementById('demoBanner').style.display = 'none';
+    renderSwitcher();
+    initStageSelect(); initChartSelect();
+    applyExercise();
+    renderActiveTab(activeTab);
+    showToast('새로 시작합니다 💪');
+  }
+}
+
+// ─── 데이터 백업: 내보내기 / 가져오기 ───
+function exportData() {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `planche-backup-${getTodayKey()}.json`;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+
+function importData(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const parsed = JSON.parse(e.target.result);
+      // 신버전(exercises) 또는 구버전(logs 평면) 백업 모두 허용
+      if (!parsed || typeof parsed !== 'object' || (!parsed.exercises && !parsed.logs))
+        throw new Error('형식이 올바르지 않습니다');
+      data = parsed;
+      normalizeData();  // 구버전이면 자동 마이그레이션 + 게터 설치
+      isDemo = false;
+      saveData();
+      document.getElementById('demoBanner').style.display = 'none';
+      renderSwitcher();
+      initStageSelect(); initChartSelect();
+      applyExercise();
+      renderActiveTab(activeTab);
+      showToast('가져오기 완료 ✓');
+    } catch (err) {
+      alert('가져오기 실패: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  input.value = '';
+}
+
+// ─── 세트 퀄리티 유틸 ───
+const QUALITY_CYCLE = [null, 'clean', 'shaky', 'fail'];
+const QUALITY_ICON = { clean: '✅', shaky: '⚠️', fail: '❌' };
+function qIcon(q) { return QUALITY_ICON[q] || '○'; }
+
+// 데모 배너 표시
+document.getElementById('demoBanner').style.display = isDemo ? 'flex' : 'none';
+
+function getTodayKey() {
+  const d = new Date();
+  if (dayEndHour > 0 && d.getHours() < dayEndHour) {
+    d.setDate(d.getDate() - 1);
+  }
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function setDayEndHour(val) {
+  const h = parseInt(val, 10);
+  dayEndHour = (Number.isInteger(h) && h >= 0 && h <= 6) ? h : 0;
+  if (!data.settings) data.settings = {};
+  data.settings.dayEndHour = dayEndHour;
+  saveData();
+  renderActiveTab(activeTab);
+  showToast('저장됨 ✓');
+}
+
+function syncDayEndSelect() {
+  const sel = document.getElementById('dayEndSelect');
+  if (sel) sel.value = String(dayEndHour);
+}
+
+function formatDate(key) {
+  const d = new Date(key + 'T00:00:00');
+  const days = ['일','월','화','수','목','금','토'];
+  return `${d.getMonth()+1}월 ${d.getDate()}일 (${days[d.getDay()]})`;
+}
+
+function formatShort(key) {
+  const d = new Date(key + 'T00:00:00');
+  return `${d.getMonth()+1}/${d.getDate()}`;
+}
+
+document.getElementById('todayBadge').textContent = formatDate(getTodayKey());
+
+function switchTab(name, el) {
+  document.querySelectorAll('.tab-content').forEach(e => e.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(e => e.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  el.classList.add('active');
+  activeTab = name;
+  renderActiveTab(name);
+}
+
+// ─── 운동 전환 ───
+function setExercise(id) {
+  if (data.currentExercise === id || !EXERCISES.find(e => e.id === id)) return;
+  // 전환 시 동작 중인 타이머 정리(좀비 인터벌 방지)
+  Object.keys(timers).forEach(k => { clearInterval(timers[k].iv); delete timers[k]; });
+  data.currentExercise = id;
+  syncExerciseConfig();
+  saveData();
+  initStageSelect(); initChartSelect();
+  applyExercise();
+  renderActiveTab(activeTab);
+}
+
+function applyExercise() {
+  const ex = CUR();
+  const isSkill = ex.type === 'skill';
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.ex === ex.id));
+  document.getElementById('headerTitle').innerHTML = '칼리스데닉스 <span>트래커</span>';
+  document.getElementById('tab-btn-roadmap').textContent = ex.midLabel;
+  // 레거시 id: today-planche/roadmapList/history-planche = 스킬 슬롯, *-pullup = 프로그램 슬롯
+  const show = (id, on) => document.getElementById(id).style.display = on ? 'block' : 'none';
+  show('today-planche',   isSkill);
+  show('today-pullup',    !isSkill);
+  show('roadmapList',     isSkill);
+  show('program-pullup',  !isSkill);
+  show('history-planche', isSkill);
+  show('history-pullup',  !isSkill);
+}
+
+function renderActiveTab(name) {
+  const prog = CUR().type === 'program';
+  if (name === 'today')        prog ? renderPullupToday()   : renderTodayCards();
+  else if (name === 'roadmap') prog ? renderProgram()       : renderRoadmap();
+  else if (name === 'history') prog ? renderPullupHistory() : renderHistory();
+}
+
+// ─── 오늘 탭 ───
+function initStageSelect() {
+  const sel = document.getElementById('currentStageSelect');
+  sel.innerHTML = STAGES.map(s =>
+    `<option value="${s.id}" ${s.id===data.currentStage?'selected':''}>#${s.id} ${s.name} (${s.nameEn})</option>`
+  ).join('');
+}
+
+function saveCurrentStage() {
+  const prev = data.currentStage;
+  const next = parseInt(document.getElementById('currentStageSelect').value);
+  // 단계를 올릴 때만 진급(졸업) 마일스톤 기록
+  if (next > prev) {
+    if (!data.milestones) data.milestones = [];
+    // 같은 단계 진급 기록 중복 누적 방지
+    if (!data.milestones.some(m => m.to === next)) {
+      data.milestones.push({ from: prev, to: next, date: getTodayKey() });
+      const toStage = STAGES.find(s => s.id === next);
+      showToast(`#${prev} → #${next} ${toStage ? toStage.name : ''} 진급! 🎉`);
+    }
+  }
+  data.currentStage = next;
+  saveData(); renderTodayCards(); renderRoadmap();
+}
+
+function renderTodayCards() {
+  // DOM 재생성으로 버튼/입력 참조가 끊기므로 활성 타이머 먼저 정리
+  Object.keys(timers).forEach(k => { clearInterval(timers[k].iv); delete timers[k]; });
+  const today = getTodayKey();
+  const todayLogs = data.logs[today] || [];
+  const showIds = [...new Set([1, data.currentStage])];
+  const container = document.getElementById('stageCards');
+
+  container.innerHTML = STAGES.filter(s => showIds.includes(s.id)).map(stage => {
+    const log = todayLogs.find(l => l.stageId === stage.id);
+    const isCurrent = stage.id === data.currentStage;
+    const isDone = !!log && log.sets.some(s => s.value);
+
+    const setsHtml = (log?.sets || [{value:''}]).map((set, i) => `
+      <div class="set-row">
+        <span class="set-label">세트 ${i+1}</span>
+        <input class="set-input" type="number" inputmode="numeric"
+          placeholder="0" value="${set.value||''}"
+          oninput="updateSet(${stage.id},${i},this.value)">
+        <span class="set-unit">${stage.unit}</span>
+        <button class="set-timer" onclick="toggleTimer(${stage.id},${i},this)" title="타이머 시작/정지">▶</button>
+        <button class="set-quality q-${set.quality||'none'}" onclick="cycleQuality(${stage.id},${i},this)" title="세트 퀄리티">${qIcon(set.quality)}</button>
+        <button class="set-remove" onclick="removeSet(${stage.id},${i})">×</button>
+      </div>
+    `).join('');
+
+    return `
+      <div class="stage-card ${isCurrent?'current':''} ${isDone?'completed-today':''}" id="card-${stage.id}">
+        <div class="stage-header" onclick="toggleCard(${stage.id})">
+          <div class="stage-num">${stage.id}</div>
+          <div class="stage-info">
+            <div class="stage-name">${stage.name}</div>
+            <div class="stage-target">목표 ${stage.goalTarget}</div>
+          </div>
+          <div class="stage-status">${isDone?'✅':isCurrent?'🎯':'○'}</div>
+        </div>
+        <div class="stage-body ${isCurrent?'open':''}" id="body-${stage.id}">
+          ${stage.drills ? `
+            <div class="roadmap-sec-label">오늘 훈련</div>
+            <ul class="roadmap-drills">${stage.drills.map(d => `<li>${d}</li>`).join('')}</ul>
+            <div class="roadmap-target">🎯 ${stage.advanceTarget}</div>
+          ` : ''}
+          <div class="sets-label">세트 기록</div>
+          <div class="sets-list" id="sets-${stage.id}">${setsHtml}</div>
+          <button class="add-set-btn" onclick="addSet(${stage.id})">+ 세트 추가</button>
+          <textarea class="memo-input" rows="2" placeholder="메모 (선택사항)"
+            oninput="updateMemo(${stage.id},this.value)">${log?.memo||''}</textarea>
+          <button class="save-btn ${isDone?'saved':''}" onclick="saveStage(${stage.id})">
+            ${isDone?'✓ 저장됨':'저장'}
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function toggleCard(id) { document.getElementById('body-'+id).classList.toggle('open'); }
+
+function getOrCreateLog(stageId) {
+  const today = getTodayKey();
+  if (!data.logs[today]) data.logs[today] = [];
+  let log = data.logs[today].find(l => l.stageId === stageId);
+  if (!log) { log = {stageId, sets:[{value:''}], memo:''}; data.logs[today].push(log); }
+  return log;
+}
+
+function updateSet(stageId, i, val) {
+  const l = getOrCreateLog(stageId);
+  if(!l.sets[i]) l.sets[i]={};
+  l.sets[i].value=val;
+  autoSave();
+}
+function updateMemo(stageId, val) { getOrCreateLog(stageId).memo = val; autoSave(); }
+
+// 세트 퀄리티 순환: 없음 → 클린 → 흔들림 → 실패 → 없음
+function cycleQuality(stageId, i, btn) {
+  const l = getOrCreateLog(stageId);
+  if(!l.sets[i]) l.sets[i]={value:''};
+  const cur = l.sets[i].quality || null;
+  const next = QUALITY_CYCLE[(QUALITY_CYCLE.indexOf(cur)+1) % QUALITY_CYCLE.length];
+  l.sets[i].quality = next;
+  btn.textContent = qIcon(next);
+  btn.className = 'set-quality q-' + (next || 'none');
+  autoSave();
+}
+
+// 내장 카운트업 타이머: 시작 → 입력칸에 실시간 표시, 정지 → 해당 세트에 초 기록
+function toggleTimer(stageId, i, btn) {
+  const key = stageId + '-' + i;
+  const input = btn.parentElement.querySelector('.set-input');
+  if (timers[key]) {
+    const elapsed = timers[key].elapsed;
+    clearInterval(timers[key].iv);
+    delete timers[key];
+    btn.textContent = '▶'; btn.classList.remove('running');
+    input.readOnly = false;
+    // 1초 미만이면 빈 값 처리 (0초 기록이 '완료'로 잘못 표시되는 것 방지)
+    input.value = elapsed > 0 ? elapsed : '';
+    updateSet(stageId, i, elapsed > 0 ? String(elapsed) : '');
+  } else {
+    const start = Date.now();
+    input.readOnly = true;
+    btn.textContent = '■'; btn.classList.add('running');
+    timers[key] = { elapsed: 0, iv: null };
+    timers[key].iv = setInterval(() => {
+      const e = Math.floor((Date.now() - start) / 1000);
+      timers[key].elapsed = e;
+      input.value = e;
+    }, 200);
+  }
+}
+
+function addSet(stageId) {
+  const l = getOrCreateLog(stageId); l.sets.push({value:''});
+  saveData(); renderTodayCards();
+}
+function removeSet(stageId, i) {
+  const l = getOrCreateLog(stageId);
+  if(l.sets.length<=1) return;
+  l.sets.splice(i,1); saveData(); renderTodayCards();
+}
+function saveStage(stageId) {
+  const l = getOrCreateLog(stageId);
+  const oldSets = l.sets;
+  const inputs = document.querySelectorAll(`#sets-${stageId} .set-input`);
+  l.sets = Array.from(inputs).map((inp, i) => ({
+    value: inp.value,
+    quality: oldSets[i] ? (oldSets[i].quality || null) : null
+  }));
+  const memo = document.querySelector(`#card-${stageId} .memo-input`);
+  if(memo) l.memo = memo.value;
+  saveData(); renderTodayCards();
+  showToast('저장됨 ✓');
+}
+
+// ─── 로드맵 탭 ───
+function renderRoadmap() {
+  const principlesHtml = `
+    <div class="principles-box">
+      <div class="principles-title">⚑ 핵심 원칙</div>
+      <ul>${PLANCHE_PRINCIPLES.map(p => `<li>${p}</li>`).join('')}</ul>
+    </div>`;
+  const itemsHtml = STAGES.map(s => {
+    const isDone = s.id < data.currentStage;
+    const isCurrent = s.id === data.currentStage;
+    const descHtml = s.desc.split('\n').map(line => `<span style="display:block">${line}</span>`).join('');
+    const drillsHtml = (s.drills || []).map(d => `<li>${d}</li>`).join('');
+    const ms = (data.milestones||[]).find(m => m.to === s.id);
+    const msBadge = ms ? `<span class="roadmap-milestone">진급 ${formatShort(ms.date)}</span>` : '';
+    return `
+      <div class="roadmap-item ${isDone?'done':''} ${isCurrent?'current':''}">
+        <div class="roadmap-dot">${isDone?'✓':s.id}</div>
+        <div class="roadmap-card">
+          <div class="roadmap-name">#${s.id} ${s.name}<span class="roadmap-kind">${s.kind||''}</span>
+            <span style="color:var(--text-muted);font-weight:400;font-size:11px;display:block;margin-top:2px">${s.nameEn}</span>
+          </div>
+          <div class="roadmap-desc">${descHtml}</div>
+          ${drillsHtml ? `<div class="roadmap-sec-label">훈련 드릴</div><ul class="roadmap-drills">${drillsHtml}</ul>` : ''}
+          ${s.advanceTarget ? `<div class="roadmap-sec-label">진급 목표</div><div class="roadmap-target">🎯 ${s.advanceTarget}</div>` : ''}
+          ${s.commonMistake ? `<div class="roadmap-mistake">⚠️ ${s.commonMistake}</div>` : ''}
+          <span class="roadmap-goal">목표: ${s.goalTarget}</span>${msBadge}
+        </div>
+      </div>
+    `;
+  }).join('');
+  document.getElementById('roadmapList').innerHTML = principlesHtml + itemsHtml;
+}
+
+// ─── 기록 탭 ───
+function calcStreak() {
+  const keys = Object.keys(data.logs).filter(k => data.logs[k].some(l => l.sets.some(s=>s.value))).sort().reverse();
+  if(!keys.length) return 0;
+  const today = getTodayKey();
+  let streak = 0, check = today;
+  for(const k of keys) {
+    if(k === check) { streak++; const d=new Date(check+'T00:00:00'); d.setDate(d.getDate()-1); check=d.toISOString().slice(0,10); }
+    else if(k < check) break;
+  }
+  return streak;
+}
+
+function renderStreak() {
+  const streak = calcStreak();
+  const allDays = Object.keys(data.logs).filter(k => data.logs[k].some(l=>l.sets.some(s=>s.value))).length;
+  document.getElementById('streakBar').innerHTML = `
+    <div class="streak-bar">
+      <div class="streak-num">${streak}</div>
+      <div class="streak-info">
+        <div class="streak-title">일 연속 운동 🔥</div>
+        <div class="streak-sub">총 ${allDays}일 운동했어요</div>
+      </div>
+    </div>
+  `;
+}
+
+// ─── 주간 요약 (이번 주: 월요일 시작) ───
+function getWeekStart() {
+  // 마감시간 보정된 '논리적 오늘'을 기준으로 주 경계를 잡아 getTodayKey()와 일관성 유지
+  const d = new Date(getTodayKey() + 'T00:00:00');
+  const offset = (d.getDay() + 6) % 7; // 월=0 기준
+  d.setDate(d.getDate() - offset);
+  d.setHours(0,0,0,0);
+  return d;
+}
+
+function renderWeek() {
+  const start = getWeekStart();
+  let days = 0, totalSets = 0;
+  const stageSecs = {};
+  Object.keys(data.logs).forEach(k => {
+    const d = new Date(k + 'T00:00:00');
+    if (d < start) return;
+    const logs = data.logs[k];
+    if (logs.some(l => l.sets.some(s => s.value))) days++;
+    logs.forEach(l => {
+      l.sets.forEach(s => {
+        const v = parseFloat(s.value) || 0;
+        if (v > 0) { totalSets++; stageSecs[l.stageId] = (stageSecs[l.stageId] || 0) + v; }
+      });
+    });
+  });
+  const totalSecs = Object.values(stageSecs).reduce((a,b)=>a+b, 0);
+  const stageRows = Object.keys(stageSecs).sort((a,b)=>a-b).map(id => {
+    const st = STAGES.find(s => s.id == id);
+    return `<div class="week-stage-row">
+      <span class="week-stage-name">#${id} ${st ? st.name : ''}</span>
+      <span class="week-stage-val">${stageSecs[id]}초</span>
+    </div>`;
+  }).join('') || `<div style="font-size:11px;color:var(--text-muted)">이번 주 기록이 아직 없어요</div>`;
+
+  document.getElementById('weekCard').innerHTML = `
+    <div class="week-card">
+      <div class="week-title">📅 이번 주 요약</div>
+      <div class="week-stats">
+        <div class="week-stat"><div class="week-stat-num">${days}</div><div class="week-stat-label">운동일</div></div>
+        <div class="week-stat"><div class="week-stat-num">${totalSets}</div><div class="week-stat-label">총 세트</div></div>
+        <div class="week-stat"><div class="week-stat-num">${totalSecs}</div><div class="week-stat-label">총 초</div></div>
+      </div>
+      ${stageRows}
+    </div>
+  `;
+}
+
+function initChartSelect() {
+  const sel = document.getElementById('chartStageSelect');
+  sel.innerHTML = STAGES.map(s =>
+    `<option value="${s.id}" ${s.id===data.currentStage?'selected':''}>#${s.id} ${s.name}</option>`
+  ).join('');
+}
+
+const CHART_METRICS = [
+  { key:'best',   label:'최고 기록', title:'최고 기록 트렌드' },
+  { key:'avg',    label:'세트 평균', title:'세트 평균 트렌드' },
+  { key:'volume', label:'총 볼륨',   title:'총 볼륨 트렌드' }
+];
+
+function renderChartMetrics() {
+  document.getElementById('chartMetrics').innerHTML = CHART_METRICS.map(m =>
+    `<div class="metric-chip ${chartMetric===m.key?'active':''}" onclick="setChartMetric('${m.key}')">${m.label}</div>`
+  ).join('');
+  const cur = CHART_METRICS.find(m => m.key === chartMetric);
+  document.getElementById('chartTitleText').textContent = cur ? cur.title : '트렌드';
+}
+
+function setChartMetric(key) {
+  chartMetric = key;
+  renderChartMetrics();
+  renderChart();
+}
+
+function metricValue(vals) {
+  if (chartMetric === 'avg') return Math.round(vals.reduce((a,b)=>a+b,0) / vals.length * 10) / 10;
+  if (chartMetric === 'volume') return vals.reduce((a,b)=>a+b,0);
+  return Math.max(...vals);
+}
+
+function renderChart() {
+  const stageId = parseInt(document.getElementById('chartStageSelect').value);
+  const stage = STAGES.find(s=>s.id===stageId);
+  const wrap = document.getElementById('chartWrap');
+
+  // 날짜별 지표(최고/평균/볼륨) 수집
+  const points = Object.keys(data.logs).sort().map(dateKey => {
+    const log = data.logs[dateKey].find(l=>l.stageId===stageId);
+    if(!log) return null;
+    const vals = log.sets.map(s=>parseFloat(s.value)||0).filter(v=>v>0);
+    if(!vals.length) return null;
+    return { date: dateKey, val: metricValue(vals) };
+  }).filter(Boolean);
+
+  if(points.length < 2) {
+    wrap.innerHTML = `<div style="text-align:center;padding:30px;color:var(--text-muted);font-size:13px">
+      기록이 2개 이상 쌓이면<br>트렌드 차트가 나타나요
+    </div>`;
+    return;
+  }
+
+  const W = wrap.clientWidth || 300;
+  const H = 120;
+  const pad = { t:10, r:10, b:28, l:36 };
+  const cw = W - pad.l - pad.r;
+  const ch = H - pad.t - pad.b;
+
+  const maxVal = Math.max(...points.map(p=>p.val)) * 1.15 || 10;
+  const minVal = 0;
+
+  const xStep = points.length > 1 ? cw / (points.length-1) : cw;
+
+  const toX = i => pad.l + (points.length>1 ? i*xStep : cw/2);
+  const toY = v => pad.t + ch - ((v-minVal)/(maxVal-minVal))*ch;
+
+  // 폴리라인
+  const poly = points.map((p,i)=>`${toX(i)},${toY(p.val)}`).join(' ');
+  // 영역 채우기
+  const area = `${toX(0)},${toY(0)} ` + poly + ` ${toX(points.length-1)},${toY(0)}`;
+
+  // Y축 라벨 (3개)
+  const yTicks = [0, Math.round(maxVal*0.5), Math.round(maxVal)];
+
+  // X축 라벨 (최대 5개)
+  const xStep2 = Math.max(1, Math.floor(points.length/5));
+  const xLabels = points.filter((_,i)=> i===0 || i===points.length-1 || i%xStep2===0);
+
+  wrap.innerHTML = `
+    <svg class="trend-chart" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+      <defs>
+        <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#c8ff00" stop-opacity="0.25"/>
+          <stop offset="100%" stop-color="#c8ff00" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      ${yTicks.map(v=>`
+        <line x1="${pad.l}" y1="${toY(v)}" x2="${W-pad.r}" y2="${toY(v)}"
+          stroke="#2e2e2e" stroke-width="1"/>
+        <text x="${pad.l-4}" y="${toY(v)+4}" text-anchor="end"
+          fill="#555" font-size="9">${v}${stage.unit}</text>
+      `).join('')}
+      <polygon points="${area}" fill="url(#areaGrad)"/>
+      <polyline points="${poly}" fill="none" stroke="#c8ff00" stroke-width="2" stroke-linejoin="round"/>
+      ${points.map((p,i)=>`
+        <circle cx="${toX(i)}" cy="${toY(p.val)}" r="3" fill="#c8ff00"/>
+      `).join('')}
+      ${xLabels.map(p=>{
+        const i = points.indexOf(p);
+        const d = new Date(p.date+'T00:00:00');
+        const label = `${d.getMonth()+1}/${d.getDate()}`;
+        return `<text x="${toX(i)}" y="${H-4}" text-anchor="middle" fill="#555" font-size="9">${label}</text>`;
+      }).join('')}
+    </svg>
+  `;
+}
+
+function renderCal() {
+  const today = getTodayKey();
+  const [ty, tm] = today.split('-').map(Number);
+  const year = ty;
+  const month = tm - 1;
+
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month+1, 0).getDate();
+
+  const days = ['일','월','화','수','목','금','토'];
+  let html = `<div class="cal-grid">`;
+  html += days.map(d=>`<div class="cal-day-label">${d}</div>`).join('');
+
+  for(let i=0;i<firstDay;i++) html += `<div class="cal-dot"></div>`;
+
+  for(let d=1;d<=daysInMonth;d++) {
+    const key = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const hasLog = data.logs[key] && data.logs[key].some(l=>l.sets.some(s=>s.value));
+    const isToday = key === today;
+    html += `<div class="cal-dot ${hasLog?'has-log':''} ${isToday?'today-dot':''}">${d}</div>`;
+  }
+  html += `</div>`;
+  document.getElementById('calGrid').innerHTML = html;
+}
+
+function renderHistoryList() {
+  const filterContainer = document.getElementById('historyFilter');
+  filterContainer.innerHTML = `
+    <div class="filter-chip ${historyFilter===0?'active':''}" onclick="setHistoryFilter(0)">전체</div>
+    ${STAGES.map(s=>`<div class="filter-chip ${historyFilter===s.id?'active':''}" onclick="setHistoryFilter(${s.id})">#${s.id} ${s.name}</div>`).join('')}
+  `;
+
+  const container = document.getElementById('historyList');
+  const keys = Object.keys(data.logs).sort().reverse();
+
+  if(!keys.length) {
+    container.innerHTML = `<div class="empty-state">아직 기록이 없어요<br>오늘 운동을 시작해보세요 💪</div>`;
+    return;
+  }
+
+  // 전체 최고 기록 계산 (바 비율용)
+  const globalMax = {};
+  STAGES.forEach(s => {
+    let m = 0;
+    Object.values(data.logs).forEach(logs => {
+      const log = logs.find(l=>l.stageId===s.id);
+      if(log) { const vals=log.sets.map(x=>parseFloat(x.value)||0); m=Math.max(m,...vals); }
+    });
+    globalMax[s.id] = m || 1;
+  });
+
+  container.innerHTML = keys.map(dateKey => {
+    const logs = data.logs[dateKey].filter(l =>
+      (historyFilter===0 || l.stageId===historyFilter) && l.sets.some(s=>s.value)
+    );
+    if(!logs.length) return '';
+    return `
+      <div class="history-day">
+        <div class="history-date">${formatDate(dateKey)}</div>
+        ${logs.map(log => {
+          const stage = STAGES.find(s=>s.id===log.stageId);
+          const vals = log.sets.map(s=>parseFloat(s.value)||0).filter(v=>v>0);
+          if(!vals.length) return '';
+          const best = Math.max(...vals);
+          const barsHtml = log.sets.map((s,i) => {
+            const v = parseFloat(s.value) || 0;
+            if (v <= 0) return '';
+            const pct = Math.round(v/globalMax[stage.id]*100);
+            const qb = s.quality ? `<span class="q-badge">${qIcon(s.quality)}</span>` : '';
+            return `
+              <div class="set-bar-row">
+                <span class="set-bar-label">세트 ${i+1}</span>
+                <div class="set-bar-track">
+                  <div class="set-bar-fill" style="width:${pct}%"></div>
+                </div>
+                <span class="set-bar-val">${v}${stage.unit}${qb}</span>
+              </div>
+            `;
+          }).join('');
+          return `
+            <div class="history-entry">
+              <div class="history-entry-name">#${stage.id} ${stage.name}</div>
+              <div class="set-bars">${barsHtml}</div>
+              <div class="history-best">최고 <strong>${best}${stage.unit}</strong> · ${vals.length}세트</div>
+              ${log.memo ? `<div class="history-memo">"${log.memo}"</div>` : ''}
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+  }).join('');
+}
+
+function setHistoryFilter(id) { historyFilter=id; renderHistoryList(); }
+
+function renderHistory() {
+  renderWeek();
+  renderStreak();
+  initChartSelect();
+  renderChartMetrics();
+  renderChart();
+  renderCal();
+  renderHistoryList();
+  syncDayEndSelect();
+}
+
+// ═══════════════ 풀업 (러시안 파이터 풀업) ═══════════════
+function puProgLen() { const p = puProgramFor(data.pullup.level); return p ? p.length : 0; }
+function puTargets(day) {
+  const prog = puProgramFor(data.pullup.level);
+  if (!prog) return null;
+  const base = prog[day-1];
+  return base ? base.slice() : null;
+}
+function puNextDay(d) { const len = puProgLen() || 30; return d >= len ? 1 : d + 1; }
+
+function getPullupLog() {
+  const today = getTodayKey();
+  const ex = data.pullup.logs[today];
+  // 유효한 그리드 로그(휴식 or sets 보유, 극초보 아님)면 그대로 사용
+  if (ex && !ex.beginner && (ex.rest || ex.sets)) return ex;
+  const day = data.pullup.day;
+  const targets = puTargets(day);
+  data.pullup.logs[today] = targets
+    ? { level: data.pullup.level, day, rest: false, done: false, sets: targets.map(t => ({ target: t, value: '', quality: null })), memo: '' }
+    : { level: data.pullup.level, day, rest: true, done: false, memo: '' };
+  return data.pullup.logs[today];
+}
+
+// 수준(레벨) 선택 드롭다운
+function puLevelSelectHtml() {
+  return `<div class="pu-setting">
+      <label>내 수준</label>
+      <select class="stage-select" style="width:auto;flex:0 0 auto;min-width:140px" onchange="setLevel(this.value)">
+        ${PULLUP_LEVELS.map(lv => `<option value="${lv}" ${lv===data.pullup.level?'selected':''}>${PULLUP_TIERS[lv].label}</option>`).join('')}
+      </select>
+    </div>`;
+}
+function setLevel(level) {
+  if (!PULLUP_TIERS[level]) return;
+  data.pullup.level = level;
+  data.pullup.day = 1;
+  // 오늘 로그가 미완료이거나 새 수준과 종류(극초보/그리드)가 다르면 제거 → 새 프로그램으로 재생성
+  const today = getTodayKey();
+  const l = data.pullup.logs[today];
+  if (l) {
+    const lKind = l.beginner ? 'beginner' : 'grid';
+    const newKind = puGetTier(level).kind;
+    if (!l.done || lKind !== newKind) delete data.pullup.logs[today];
+  }
+  saveData();
+  renderActiveTab(activeTab);
+  showToast(`${PULLUP_TIERS[level].label} 선택`);
+}
+
+// ── 극초보(0개) 단계 진행 ──
+function setBeginnerStage(val) {
+  data.pullup.beginnerStage = parseInt(val) || 1;
+  const l = data.pullup.logs[getTodayKey()];
+  if (l && l.beginner && !l.done) l.stage = data.pullup.beginnerStage;
+  autoSave();
+  renderPullupToday();
+}
+function getBeginnerLog() {
+  const today = getTodayKey();
+  const l = data.pullup.logs[today];
+  if (l && l.beginner) return l; // 유효한 극초보 로그면 그대로
+  const nl = { beginner: true, stage: data.pullup.beginnerStage, value: '', memo: '', done: false };
+  data.pullup.logs[today] = nl;
+  return nl;
+}
+function puBeginnerUpdate(val) { const l = getBeginnerLog(); if (l.beginner) { l.value = val; autoSave(); } }
+function puBeginnerMemo(val) { const l = getBeginnerLog(); if (l.beginner) { l.memo = val; autoSave(); } }
+function completeBeginner() {
+  const l = getBeginnerLog();
+  if (!(parseFloat(l.value) > 0)) { showToast('오늘 기록을 입력해 주세요'); return; }
+  l.done = true; saveData(); showToast('오늘 완료! 💪'); renderPullupToday();
+}
+
+function puUpdateSet(i, val) { const l = getPullupLog(); if (!l.sets[i]) l.sets[i] = {}; l.sets[i].value = val; autoSave(); }
+function puUpdateMemo(val) { getPullupLog().memo = val; autoSave(); }
+function puCycleQuality(i, btn) {
+  const l = getPullupLog();
+  if (l.rest) return;
+  if (!l.sets[i]) l.sets[i] = { value: '' };
+  const cur = l.sets[i].quality || null;
+  const next = QUALITY_CYCLE[(QUALITY_CYCLE.indexOf(cur)+1) % QUALITY_CYCLE.length];
+  l.sets[i].quality = next;
+  btn.textContent = qIcon(next);
+  btn.className = 'set-quality q-' + (next || 'none');
+  autoSave();
+}
+
+// 오늘 완료 → 다음 Day로 진행 (한 번만 진행)
+// 통과 판정: 모든 세트가 목표 이상이어야 다음 Day 진행 (러시안 파이터 풀업 규칙)
+function puDayPassed(l) {
+  if (!l.sets) return false;
+  return l.sets.every(s => (parseFloat(s.value) || 0) >= (s.target || 0));
+}
+
+function completeToday() {
+  const l = getPullupLog();
+  if (!l.rest && (!l.sets || !l.sets.some(s => parseFloat(s.value) > 0))) {
+    showToast('세트를 하나 이상 입력해 주세요');
+    return;
+  }
+  l.done = true;
+  const passed = l.rest || puDayPassed(l);
+  l.passed = passed;
+  if (passed && !l.advanced) {
+    // 통과 → 다음 Day로 진행 (한 번만)
+    l.advanced = true;
+    data.pullup.day = puNextDay(l.day);
+    showToast(l.rest ? `휴식 완료 · 다음 Day ${data.pullup.day}` : `통과! 💪 다음 Day ${data.pullup.day}`);
+  } else if (!passed && l.advanced) {
+    // 이전엔 통과로 진행했으나 수정 후 미달 → 되돌려 같은 Day 유지
+    l.advanced = false;
+    data.pullup.day = l.day;
+    showToast(`목표 미달로 변경 · Day ${l.day} 유지`);
+  } else if (!passed) {
+    // 목표 미달 → 진행 없이 같은 Day 반복
+    showToast(`목표 미달 · 다음에 Day ${l.day} 다시 도전`);
+  } else {
+    showToast('저장됨 ✓');
+  }
+  saveData();
+  renderPullupToday();
+}
+
+function renderPullupToday() {
+  const c = document.getElementById('today-pullup');
+  const isBeginner = puGetTier(data.pullup.level).kind === 'beginner';
+  c.innerHTML = puLevelSelectHtml() + (isBeginner ? renderBeginnerToday() : renderGridToday());
+}
+
+// 그리드(RM) 수준의 오늘 화면
+function renderGridToday() {
+  const log = getPullupLog();
+  const day = log.day;
+  const len = puProgLen();
+  // 30일 이후 '이어가기' 구간 안내(재측정 권장)
+  const bridgeNote = (len > 30 && day > 30)
+    ? `<div style="background:var(--accent-dim);border:1px solid var(--accent);border-radius:var(--radius);padding:10px 14px;margin-bottom:12px;font-size:12px;color:var(--accent);line-height:1.6">💡 30일 사이클 이후 <b>이어가기 구간</b>이에요. 2~3일 쉬고 최대 개수를 재측정해, <b>15개에 도달하면 수준을 15RM으로</b> 올리세요.</div>`
+    : '';
+  const dayBar = `
+    <div class="pu-daybar">
+      <div class="pu-daynum">${day}</div>
+      <div class="pu-dayinfo">
+        <div class="pu-daytitle">${data.pullup.level} · Day ${day} / ${len}${log.rest ? ' · 휴식일' : ''}</div>
+        <div class="pu-daysub">${log.rest ? '오늘은 쉬어가는 날이에요' : '세트 간 약 5분 휴식 · 첫 세트는 최대로'}</div>
+      </div>
+    </div>`;
+
+  if (log.rest) {
+    return bridgeNote + dayBar + `
+      <div class="pu-rest-card">
+        <div class="pu-rest-emoji">😴</div>
+        <div class="pu-rest-text">휴식일입니다.<br>회복도 훈련의 일부예요.</div>
+      </div>
+      <button class="save-btn ${log.done ? 'saved' : ''}" onclick="completeToday()">
+        ${log.done ? `✓ 완료됨 (다음 Day ${data.pullup.day})` : '휴식 완료 →'}
+      </button>`;
+  }
+
+  const setsHtml = log.sets.map((s, i) => `
+    <div class="pu-set-row">
+      <span class="pu-set-label">세트 ${i+1}</span>
+      <span class="pu-target">목표 ${s.target}</span>
+      <input class="pu-input" type="number" inputmode="numeric" placeholder="${s.target}"
+        value="${s.value||''}" oninput="puUpdateSet(${i},this.value)">
+      <span class="set-unit">개</span>
+      <button class="set-quality q-${s.quality||'none'}" onclick="puCycleQuality(${i},this)" title="세트 퀄리티">${qIcon(s.quality)}</button>
+    </div>`).join('');
+
+  const doneLabel = log.done
+    ? (log.passed ? `✓ 통과 (다음 Day ${data.pullup.day})` : `△ 미달 — Day ${log.day} 재도전`)
+    : '오늘 운동 완료 →';
+  return bridgeNote + dayBar + `
+    <div class="chart-card">
+      <div class="sets-label">오늘의 세트 · 목표 ${log.sets.map(s => s.target).join(' · ')}</div>
+      ${setsHtml}
+      <div style="font-size:11px;color:var(--text-muted);margin:10px 0 2px;line-height:1.6">
+        ⚑ 모든 세트의 <b style="color:var(--text-dim)">목표 개수를 채워야</b> 다음 Day로 진행돼요.<br>
+        못 채우면 다음에 <b style="color:var(--text-dim)">같은 Day</b>를 다시 합니다. 반동·킵핑은 빼고 정직하게!
+      </div>
+      <textarea class="memo-input" rows="2" placeholder="메모 (선택사항)" oninput="puUpdateMemo(this.value)">${log.memo||''}</textarea>
+      <button class="save-btn ${log.done ? 'saved' : ''}" onclick="completeToday()">${doneLabel}</button>
+    </div>`;
+}
+
+// 극초보 수준의 오늘 화면 (단계 진행형)
+function renderBeginnerToday() {
+  const log = getBeginnerLog();
+  const cur = data.pullup.beginnerStage;
+  const stage = PULLUP_BEGINNER.find(s => s.id === cur) || PULLUP_BEGINNER[0];
+  const descHtml = stage.desc.split('\n').map(l => `<span style="display:block">${l}</span>`).join('');
+  const selector = `
+    <div class="pu-setting">
+      <label>현재 단계</label>
+      <select class="stage-select" style="width:auto;flex:0 0 auto;min-width:160px" onchange="setBeginnerStage(this.value)">
+        ${PULLUP_BEGINNER.map(s => `<option value="${s.id}" ${s.id===cur?'selected':''}>${s.id}. ${s.name}</option>`).join('')}
+      </select>
+    </div>`;
+  const isB = log.beginner;
+  return selector + `
+    <div class="pu-daybar">
+      <div class="pu-daynum">${stage.id}</div>
+      <div class="pu-dayinfo">
+        <div class="pu-daytitle">${stage.name}</div>
+        <div class="pu-daysub">목표 ${stage.target} · 1단계씩 차근차근</div>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="roadmap-desc" style="margin-bottom:12px">${descHtml}</div>
+      <div class="pu-set-row">
+        <span class="pu-set-label">오늘</span>
+        <input class="pu-input" type="number" inputmode="numeric" placeholder="기록"
+          value="${isB ? (log.value||'') : ''}" oninput="puBeginnerUpdate(this.value)">
+        <span class="set-unit">${stage.unit}</span>
+      </div>
+      <textarea class="memo-input" rows="2" placeholder="메모 (선택사항)" oninput="puBeginnerMemo(this.value)">${isB ? (log.memo||'') : ''}</textarea>
+      <button class="save-btn ${log.done ? 'saved' : ''}" onclick="completeBeginner()">
+        ${log.done ? '✓ 오늘 완료됨' : '오늘 완료 →'}
+      </button>
+    </div>`;
+}
+
+function renderProgram() {
+  const c = document.getElementById('program-pullup');
+  const isBeginner = puGetTier(data.pullup.level).kind === 'beginner';
+  c.innerHTML = puLevelSelectHtml() + (isBeginner ? renderBeginnerRoadmap() : renderGridProgram());
+}
+
+function renderGridProgram() {
+  const prog = puProgramFor(data.pullup.level);
+  const cur = data.pullup.day;
+  return prog.map((base, idx) => {
+    const day = idx + 1;
+    const isRest = base === null;
+    const isCur = day === cur;
+    // 30일 이후는 '이어가기(상위 등급 준비)' 구간 — 구분선 표시
+    const divider = (day === 31 && prog.length > 30)
+      ? `<div class="section-divider" style="margin:14px 0 8px">── 30일 이후 · 이어가기 (15RM 준비) ──</div>`
+      : '';
+    return divider + `<div class="pu-prog-row ${isCur?'current':''} ${isRest?'rest':''}">
+      <span class="pu-prog-day">Day ${day}</span>
+      ${isRest ? '<span class="pu-prog-rest-label">😴 휴식</span>' : `<span class="pu-prog-reps">${base.join(' · ')}</span>`}
+      ${isCur ? '<span style="margin-left:auto;font-size:11px;color:var(--accent);font-weight:700">오늘 ▶</span>' : ''}
+    </div>`;
+  }).join('');
+}
+
+function renderBeginnerRoadmap() {
+  const cur = data.pullup.beginnerStage;
+  return PULLUP_BEGINNER.map(s => {
+    const isDone = s.id < cur, isCur = s.id === cur;
+    const descHtml = s.desc.split('\n').map(l => `<span style="display:block">${l}</span>`).join('');
+    return `
+      <div class="roadmap-item ${isDone?'done':''} ${isCur?'current':''}">
+        <div class="roadmap-dot">${isDone?'✓':s.id}</div>
+        <div class="roadmap-card">
+          <div class="roadmap-name">${s.id}. ${s.name}</div>
+          <div class="roadmap-desc">${descHtml}</div>
+          <span class="roadmap-goal">목표: ${s.target}</span>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// 풀업 기록용 유틸
+function puSessionTotal(l) { if (!l || !l.sets) return 0; return l.sets.reduce((a, s) => a + (parseFloat(s.value)||0), 0); }
+function puIsWorkout(l) {
+  if (!l) return false;
+  if (l.beginner) return parseFloat(l.value) > 0;
+  return !l.rest && l.sets && l.sets.some(s => parseFloat(s.value) > 0);
+}
+function puWorkoutDays() {
+  return Object.keys(data.pullup.logs).filter(k => puIsWorkout(data.pullup.logs[k]));
+}
+function calcPullupStreak() {
+  const keys = puWorkoutDays().sort().reverse();
+  if (!keys.length) return 0;
+  let streak = 0, check = getTodayKey();
+  for (const k of keys) {
+    if (k === check) { streak++; const d = new Date(check+'T00:00:00'); d.setDate(d.getDate()-1); check = d.toISOString().slice(0,10); }
+    else if (k < check) break;
+  }
+  return streak;
+}
+
+// 플란체/풀업 공용 트렌드 차트 SVG 생성
+function trendChartSvg(points, unit, W) {
+  if (points.length < 2) {
+    return `<div style="text-align:center;padding:30px;color:var(--text-muted);font-size:13px">기록이 2개 이상 쌓이면<br>트렌드 차트가 나타나요</div>`;
+  }
+  const H = 120, pad = { t:10, r:10, b:28, l:36 };
+  const cw = W - pad.l - pad.r, ch = H - pad.t - pad.b;
+  const maxVal = Math.max(...points.map(p=>p.val)) * 1.15 || 10, minVal = 0;
+  const xStep = points.length > 1 ? cw / (points.length-1) : cw;
+  const toX = i => pad.l + (points.length>1 ? i*xStep : cw/2);
+  const toY = v => pad.t + ch - ((v-minVal)/(maxVal-minVal))*ch;
+  const poly = points.map((p,i)=>`${toX(i)},${toY(p.val)}`).join(' ');
+  const area = `${toX(0)},${toY(0)} ` + poly + ` ${toX(points.length-1)},${toY(0)}`;
+  const yTicks = [0, Math.round(maxVal*0.5), Math.round(maxVal)];
+  const xStep2 = Math.max(1, Math.floor(points.length/5));
+  const xLabels = points.filter((_,i)=> i===0 || i===points.length-1 || i%xStep2===0);
+  return `
+    <svg class="trend-chart" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+      <defs><linearGradient id="areaGrad2" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#c8ff00" stop-opacity="0.25"/>
+        <stop offset="100%" stop-color="#c8ff00" stop-opacity="0"/>
+      </linearGradient></defs>
+      ${yTicks.map(v=>`
+        <line x1="${pad.l}" y1="${toY(v)}" x2="${W-pad.r}" y2="${toY(v)}" stroke="#2e2e2e" stroke-width="1"/>
+        <text x="${pad.l-4}" y="${toY(v)+4}" text-anchor="end" fill="#555" font-size="9">${v}${unit}</text>
+      `).join('')}
+      <polygon points="${area}" fill="url(#areaGrad2)"/>
+      <polyline points="${poly}" fill="none" stroke="#c8ff00" stroke-width="2" stroke-linejoin="round"/>
+      ${points.map((p,i)=>`<circle cx="${toX(i)}" cy="${toY(p.val)}" r="3" fill="#c8ff00"/>`).join('')}
+      ${xLabels.map(p=>{ const i=points.indexOf(p); const d=new Date(p.date+'T00:00:00'); return `<text x="${toX(i)}" y="${H-4}" text-anchor="middle" fill="#555" font-size="9">${d.getMonth()+1}/${d.getDate()}</text>`; }).join('')}
+    </svg>`;
+}
+
+function renderPullupHistory() {
+  const c = document.getElementById('history-pullup');
+  const workoutDays = puWorkoutDays();
+  const streak = calcPullupStreak();
+  const totalDays = workoutDays.length;
+
+  // 주간 요약
+  const start = getWeekStart();
+  let wDays = 0, wReps = 0;
+  workoutDays.forEach(k => {
+    if (new Date(k+'T00:00:00') >= start) { wDays++; wReps += puSessionTotal(data.pullup.logs[k]); }
+  });
+
+  // 차트: 세션 총 렙
+  const points = Object.keys(data.pullup.logs).sort().map(k => {
+    const l = data.pullup.logs[k];
+    if (!l || l.rest) return null;
+    const t = puSessionTotal(l);
+    return t > 0 ? { date: k, val: t } : null;
+  }).filter(Boolean);
+  const cardW = (c.clientWidth || 320) - 32;
+
+  // 캘린더 (이번 달)
+  const todayK = getTodayKey();
+  const [tyr, tmo] = todayK.split('-').map(Number);
+  const yr = tyr, mo = tmo - 1;
+  const firstDay = new Date(yr, mo, 1).getDay(), dim = new Date(yr, mo+1, 0).getDate();
+  const dnames = ['일','월','화','수','목','금','토'];
+  let calHtml = `<div class="cal-grid">` + dnames.map(d=>`<div class="cal-day-label">${d}</div>`).join('');
+  for (let i=0;i<firstDay;i++) calHtml += `<div class="cal-dot"></div>`;
+  for (let d=1; d<=dim; d++) {
+    const key = `${yr}-${String(mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const has = puIsWorkout(data.pullup.logs[key]);
+    calHtml += `<div class="cal-dot ${has?'has-log':''} ${key===todayK?'today-dot':''}">${d}</div>`;
+  }
+  calHtml += `</div>`;
+
+  // 기록 리스트 (극초보 단계형 / RM 그리드형 분기)
+  const listHtml = Object.keys(data.pullup.logs).sort().reverse().map(k => {
+    const l = data.pullup.logs[k];
+    if (!puIsWorkout(l)) return '';
+    if (l.beginner) {
+      const st = PULLUP_BEGINNER.find(s => s.id === l.stage);
+      return `
+        <div class="history-day">
+          <div class="history-date">${formatDate(k)} · 극초보</div>
+          <div class="history-entry">
+            <div class="history-entry-name">${st ? st.name : '극초보 단계'} — <strong style="color:var(--accent)">${l.value}${st ? st.unit : ''}</strong></div>
+            ${l.memo ? `<div class="history-memo">"${l.memo}"</div>` : ''}
+          </div>
+        </div>`;
+    }
+    const total = puSessionTotal(l);
+    const rows = l.sets.map((s, i) => {
+      const v = parseFloat(s.value) || 0;
+      const q = s.quality ? `<span class="q-badge">${qIcon(s.quality)}</span>` : '';
+      const hit = (s.target && v >= s.target) ? 'color:var(--success);font-weight:700' : '';
+      const tgt = s.target ? `<span style="color:var(--text-muted);font-size:10px">/${s.target}</span>` : '';
+      return `<div class="pu-hist-set"><span style="color:var(--text-muted)">세트${i+1}</span> <span style="${hit}">${v||'-'}</span>${tgt}${q}</div>`;
+    }).join('');
+    const passBadge = l.passed === false
+      ? ` <span style="color:var(--danger);font-size:11px;font-weight:600">· 미달</span>`
+      : (l.passed ? ` <span style="color:var(--success);font-size:11px;font-weight:600">· 통과</span>` : '');
+    return `
+      <div class="history-day">
+        <div class="history-date">${formatDate(k)} · ${l.level||''} Day ${l.day}${passBadge}</div>
+        <div class="history-entry">
+          <div class="history-entry-name">러시안 파이터 풀업 — 총 <strong style="color:var(--accent)">${total}</strong>개</div>
+          <div class="pu-hist-sets">${rows}</div>
+          ${l.memo ? `<div class="history-memo">"${l.memo}"</div>` : ''}
+        </div>
+      </div>`;
+  }).join('') || `<div class="empty-state">아직 풀업 기록이 없어요<br>오늘 운동을 시작해보세요 💪</div>`;
+
+  // 진행 상황 라벨
+  const tier = puGetTier(data.pullup.level);
+  const progressLabel = tier.kind === 'beginner'
+    ? `현재 ${(PULLUP_BEGINNER.find(s => s.id === data.pullup.beginnerStage)||{}).name || '극초보'}`
+    : `현재 ${data.pullup.level} · Day ${data.pullup.day}/${puProgLen()}`;
+
+  c.innerHTML = `
+    <div class="week-card">
+      <div class="week-title">📅 이번 주 요약</div>
+      <div class="week-stats">
+        <div class="week-stat"><div class="week-stat-num">${wDays}</div><div class="week-stat-label">운동일</div></div>
+        <div class="week-stat"><div class="week-stat-num">${wReps}</div><div class="week-stat-label">총 렙</div></div>
+        <div class="week-stat"><div class="week-stat-num">${wDays?Math.round(wReps/wDays):0}</div><div class="week-stat-label">일 평균</div></div>
+      </div>
+    </div>
+    <div class="streak-bar">
+      <div class="streak-num">${streak}</div>
+      <div class="streak-info">
+        <div class="streak-title">일 연속 풀업 🔥</div>
+        <div class="streak-sub">총 ${totalDays}일 운동 · ${progressLabel}</div>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title"><span>세션 총 렙 트렌드</span></div>
+      <div class="chart-wrap">${trendChartSvg(points, '개', cardW)}</div>
+    </div>
+    <div class="cal-section">
+      <div class="cal-label">이번 달 풀업 현황</div>
+      ${calHtml}
+    </div>
+    <div class="section-divider">전체 기록</div>
+    ${listHtml}
+  `;
+  syncDayEndSelect();
+}
+
+// 초기 렌더링
+renderSwitcher();
+initStageSelect();
+applyExercise();
+renderActiveTab('today');
+syncDayEndSelect();
+</script>
+
+<!-- ☁ Firebase 클라우드 동기화 (Firestore + Google 로그인) -->
+<!-- 설정 방법: 아래 firebaseConfig를 Firebase 콘솔의 본인 config로 교체하면 동기화가 켜집니다. -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
+    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  import { getFirestore, doc, getDoc, setDoc, serverTimestamp }
+    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  // ▼▼▼ 여기를 Firebase 콘솔 > 프로젝트 설정 > 내 앱 의 config로 교체 ▼▼▼
+  const firebaseConfig = {
+    apiKey: "AIzaSyDIf2hpNjE0x7XukO_NPY2vJdbEvUlNuec",
+    authDomain: "calisthenics-4e2f9.firebaseapp.com",
+    projectId: "calisthenics-4e2f9",
+    storageBucket: "calisthenics-4e2f9.firebasestorage.app",
+    messagingSenderId: "348411566643",
+    appId: "1:348411566643:web:d057fbf4aea1d25ba4e146"
+  };
+  // ▲▲▲ 여기까지 ▲▲▲
+
+  const statusEl = document.getElementById('cloudStatus');
+  const btnEl = document.getElementById('cloudBtn');
+  const configReady = firebaseConfig.apiKey && !firebaseConfig.apiKey.startsWith('PASTE');
+
+  if (!configReady) {
+    // 아직 config 미설정 → 로컬 전용으로 동작
+    statusEl.textContent = '☁ 로컬 저장 (Firebase 미설정)';
+    btnEl.style.display = 'none';
+  } else {
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    let uid = null, saveTimer = null;
+
+    window.cloudSignIn = () =>
+      signInWithPopup(auth, new GoogleAuthProvider()).catch(e => alert('로그인 실패: ' + e.message));
+    window.cloudSignOut = () => signOut(auth);
+
+    // saveData() 가 호출 → 디바운스로 Firestore에 동기화
+    window.cloudSave = () => {
+      if (!uid) return;
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(async () => {
+        try {
+          const d = window.getAppData();
+          d.updatedAt = Date.now();
+          await setDoc(doc(db, 'planche', uid),
+            { blob: JSON.stringify(d), updatedAt: serverTimestamp() });
+          statusEl.textContent = '☁ 동기화됨 · ' + (auth.currentUser?.email || '');
+        } catch (e) { console.warn('cloud save 실패', e); }
+      }, 800);
+    };
+
+    // 클라우드 데이터 적용 + 전체 다시 렌더
+    const applyCloud = (cd) => {
+      window.setAppData(cd);
+      window.clearDemoFlag();
+      document.getElementById('demoBanner').style.display = 'none';
+      window.initStageSelect();
+      window.initChartSelect();
+      window.applyExercise();
+      window.renderActiveTab(window.getActiveTab());
+      window.syncDayEndSelect();
+    };
+    const renderFresh = () => {
+      document.getElementById('demoBanner').style.display = 'none';
+      window.initStageSelect();
+      window.initChartSelect();
+      window.applyExercise();
+      window.renderActiveTab(window.getActiveTab());
+      window.syncDayEndSelect();
+    };
+
+    onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        uid = user.uid;
+        btnEl.textContent = '로그아웃';
+        btnEl.setAttribute('onclick', 'cloudSignOut()');
+        statusEl.textContent = '☁ ' + (user.email || '로그인됨');
+        try {
+          const snap = await getDoc(doc(db, 'planche', uid));
+          const cloudData = (snap.exists() && snap.data().blob) ? JSON.parse(snap.data().blob) : null;
+          const localDemo = window.isDemoActive();
+          if (cloudData) {
+            if (localDemo) {
+              // 로컬은 데모뿐 → 클라우드 채택
+              applyCloud(cloudData);
+              window.showToast('클라우드에서 불러옴 ☁');
+            } else {
+              // 둘 다 실데이터 → 최신 타임스탬프 우선 (로컬 최신본 보호)
+              const cloudT = cloudData.updatedAt || 0;
+              const localT = window.getAppData().updatedAt || 0;
+              if (cloudT >= localT) {
+                applyCloud(cloudData);
+                window.showToast('클라우드에서 불러옴 ☁');
+              } else {
+                window.cloudSave();
+                window.showToast('로컬이 최신 → 클라우드 갱신 ☁');
+              }
+            }
+          } else {
+            // 클라우드 최초(빈 문서)
+            if (localDemo) {
+              // 데모를 올리지 않고 빈 계정으로 시작
+              window.startFresh();
+              renderFresh();
+              window.cloudSave();
+              window.showToast('새 계정으로 시작 ☁');
+            } else {
+              window.cloudSave();
+              window.showToast('클라우드 동기화 시작 ☁');
+            }
+          }
+        } catch (e) { console.warn('cloud load 실패', e); }
+      } else {
+        uid = null;
+        btnEl.textContent = 'Google 로그인';
+        btnEl.setAttribute('onclick', 'cloudSignIn()');
+        statusEl.textContent = '☁ 로컬 저장 중';
+      }
+    });
+  }
+</script>
+</body>
+</html>
