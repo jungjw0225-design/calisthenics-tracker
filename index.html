@@ -8,6 +8,9 @@
 <title>칼리스데닉스 트래커</title>
 <link rel="apple-touch-icon" href="icon-C.png"/>
 <link rel="icon" href="icon-C.png"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=DM+Mono:wght@400;500&family=Playfair+Display:wght@700&display=swap" rel="stylesheet"/>
 <style>
   :root {
     --bg: #0f0f0f;
@@ -30,13 +33,19 @@
   body {
     background: var(--bg);
     color: var(--text);
-    font-family: 'Pretendard', 'Apple SD Gothic Neo', -apple-system, sans-serif;
+    font-family: 'Noto Sans KR', sans-serif;
     min-height: 100vh;
     padding-bottom: 80px;
     line-height: 1.6;
     word-break: keep-all;
     overflow-wrap: break-word;
   }
+
+  /* 루틴앱과 동일한 폰트 체계 (Noto Sans KR 본문 / Playfair Display 큰 숫자 / DM Mono 라벨) */
+  input, button, textarea, select { font-family: inherit; }
+  .streak-num, .week-stat-num, .pu-daynum { font-family: 'Playfair Display', serif; }
+  .current-stage-label, .sets-label, .cal-label, .section-divider, .history-date,
+  .roadmap-sec-label, .backup-label, .week-title, .pu-prog-day { font-family: 'DM Mono', monospace; }
 
   .header {
     padding: 24px 20px 16px;
