@@ -535,6 +535,10 @@
 </div>
 
 <div id="tab-today" class="tab-content active">
+  <div id="dayCloseBar" style="display:flex;align-items:center;gap:10px;padding:14px 20px 0">
+    <span id="todayDateLabel" style="font-size:12px;color:var(--text-dim);cursor:default"></span>
+    <button id="dayCloseBtn" class="cloud-btn" style="margin-left:auto" onclick="toggleDayClose()">하루 마감하기</button>
+  </div>
   <div id="today-planche">
     <div class="today-section">
       <div class="current-stage-selector">
@@ -959,6 +963,15 @@ normalizeData();
 let activeTab = 'today';
 let historyFilter = 0;
 
+// ── 기능 2: 하루 마감하기 (세션 전용·서버 미저장) ──
+let dayCloseOverride = null;             // 'YYYY-MM-DD'(내일) 또는 null
+function activeDateKey() { return dayCloseOverride || getTodayKey(); }
+function dateKeyToObj(k){ return new Date(k + 'T00:00:00'); }
+function keyAddDays(k, n){
+  const d = dateKeyToObj(k); d.setDate(d.getDate() + n);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
 // ── 클라우드(Firebase) 연동 브리지: 모듈 스크립트에서 data/탭에 접근하기 위함 ──
 window.getAppData = () => data;
 window.setAppData = (d) => { data = d; normalizeData(); };
@@ -1102,7 +1115,7 @@ function formatShort(key) {
 
 function refreshTodayBadge() {
   const el = document.getElementById('todayBadge');
-  if (el) el.textContent = formatDate(getTodayKey());
+  if (el) el.textContent = formatDate(activeDateKey());
 }
 refreshTodayBadge();
 
@@ -1150,6 +1163,37 @@ function renderActiveTab(name) {
   if (name === 'today')        prog ? renderPullupToday()   : renderTodayCards();
   else if (name === 'roadmap') prog ? renderProgram()       : renderRoadmap();
   else if (name === 'history') prog ? renderPullupHistory() : renderHistory();
+  refreshDayCloseUI();
+}
+
+// ── 기능 2: 하루 마감 UI(라벨/버튼) ──
+function refreshDayCloseUI() {
+  const lbl = document.getElementById('todayDateLabel');
+  const btn = document.getElementById('dayCloseBtn');
+  if (lbl) {
+    lbl.textContent = formatDate(activeDateKey());
+    const closed = !!dayCloseOverride;
+    lbl.style.cursor = closed ? 'pointer' : 'default';
+    lbl.style.color  = closed ? 'var(--accent)' : 'var(--text-dim)';
+    lbl.title        = closed ? '눌러서 오늘로 돌아가기' : '';
+    lbl.onclick      = closed ? returnToToday : null;
+  }
+  if (btn) {
+    btn.textContent = dayCloseOverride ? '마감 취소' : '하루 마감하기';
+    btn.style.borderColor = dayCloseOverride ? 'var(--accent)' : '';
+    btn.style.color       = dayCloseOverride ? 'var(--accent)' : '';
+  }
+}
+function toggleDayClose() {
+  if (dayCloseOverride) { dayCloseOverride = null; showToast('오늘로 돌아왔어요'); }
+  else { dayCloseOverride = keyAddDays(getTodayKey(), 1); showToast('마감했어요 🌙 내일 운동을 시작하세요'); }
+  renderActiveTab(activeTab);   // 내부에서 refreshTodayBadge + refreshDayCloseUI 호출
+}
+function returnToToday() {
+  if (!dayCloseOverride) return;
+  dayCloseOverride = null;
+  renderActiveTab(activeTab);
+  showToast('오늘로 돌아왔어요');
 }
 
 // ─── 오늘 탭 ───
@@ -1180,7 +1224,7 @@ function saveCurrentStage() {
 function renderTodayCards() {
   // DOM 재생성으로 버튼/입력 참조가 끊기므로 활성 타이머 먼저 정리
   Object.keys(timers).forEach(k => { clearInterval(timers[k].iv); delete timers[k]; });
-  const today = getTodayKey();
+  const today = activeDateKey();
   const todayLogs = data.logs[today] || [];
   const showIds = [...new Set([1, data.currentStage])];
   const container = document.getElementById('stageCards');
@@ -1236,7 +1280,7 @@ function renderTodayCards() {
 function toggleCard(id) { document.getElementById('body-'+id).classList.toggle('open'); }
 
 function getOrCreateLog(stageId) {
-  const today = getTodayKey();
+  const today = activeDateKey();
   if (!data.logs[today]) data.logs[today] = [];
   let log = data.logs[today].find(l => l.stageId === stageId);
   if (!log) { log = {stageId, sets:[{value:''}], memo:''}; data.logs[today].push(log); }
@@ -1646,7 +1690,7 @@ function puTargets(day) {
 function puNextDay(d) { const len = puProgLen() || 30; return d >= len ? 1 : d + 1; }
 
 function getPullupLog() {
-  const today = getTodayKey();
+  const today = activeDateKey();
   const ex = data.pullup.logs[today];
   // 유효한 그리드 로그(휴식 or sets 보유, 극초보 아님)면 그대로 사용
   if (ex && !ex.beginner && (ex.rest || ex.sets)) return ex;
@@ -1672,7 +1716,7 @@ function setLevel(level) {
   data.pullup.level = level;
   data.pullup.day = 1;
   // 오늘 로그가 미완료이거나 새 수준과 종류(극초보/그리드)가 다르면 제거 → 새 프로그램으로 재생성
-  const today = getTodayKey();
+  const today = activeDateKey();
   const l = data.pullup.logs[today];
   if (l) {
     const lKind = l.beginner ? 'beginner' : 'grid';
@@ -1687,13 +1731,13 @@ function setLevel(level) {
 // ── 극초보(0개) 단계 진행 ──
 function setBeginnerStage(val) {
   data.pullup.beginnerStage = parseInt(val) || 1;
-  const l = data.pullup.logs[getTodayKey()];
+  const l = data.pullup.logs[activeDateKey()];
   if (l && l.beginner && !l.done) l.stage = data.pullup.beginnerStage;
   autoSave();
   renderPullupToday();
 }
 function getBeginnerLog() {
-  const today = getTodayKey();
+  const today = activeDateKey();
   const l = data.pullup.logs[today];
   if (l && l.beginner) return l; // 유효한 극초보 로그면 그대로
   const nl = { beginner: true, stage: data.pullup.beginnerStage, value: '', memo: '', done: false };
@@ -2068,6 +2112,50 @@ initStageSelect();
 applyExercise();
 renderActiveTab('today');
 syncDayEndSelect();
+
+// ── 기능 1: 포그라운드 자동 새로고침 ──
+let lastHidden = 0;
+let lastTodayKey = getTodayKey();
+const RELOAD_AFTER_MS = 30 * 60 * 1000;
+let fgGuard = false;
+function onForeground() {
+  // bfcache 복귀 시 pageshow + visibilitychange:visible가 연달아 발화해
+  // onForeground가 두 번 호출되며 불필요한 재렌더가 생기는 것을 한 tick 동안 차단.
+  if (fgGuard) return;
+  fgGuard = true;
+  setTimeout(() => { fgGuard = false; }, 0);
+  const away = lastHidden ? Date.now() - lastHidden : 0;
+  lastHidden = 0;
+  if (away >= RELOAD_AFTER_MS) { location.reload(); return; }
+  // 백그라운드 중 논리적 날짜가 넘어갔으면 복귀 즉시 마감 자동 해제(인터벌 대기 없이 UI 일관성 유지)
+  if (dayCloseOverride && getTodayKey() >= dayCloseOverride) dayCloseOverride = null;
+  const nowKey = getTodayKey();
+  const dateChanged = nowKey !== lastTodayKey;
+  lastTodayKey = nowKey;
+  renderActiveTab(activeTab);
+  if (dateChanged) window.scrollTo(0, 0);
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') { lastHidden = Date.now(); lastTodayKey = getTodayKey(); }
+  else if (document.visibilityState === 'visible') onForeground();
+});
+window.addEventListener('pageshow', e => { if (e.persisted) onForeground(); });
+// 데스크톱에서 다른 OS 앱으로 전환 시엔 visibilitychange:hidden이 발화하지 않으므로
+// blur에서 lastHidden을 기록해야 복귀(focus) 시 onForeground가 의미를 갖는다.
+window.addEventListener('blur', () => { if (document.visibilityState === 'visible' && !lastHidden) { lastHidden = Date.now(); lastTodayKey = getTodayKey(); } });
+window.addEventListener('focus', () => { if (lastHidden) onForeground(); });
+
+// ── 기능 2: 마감 자동 해제 (논리적 오늘 기준 — dayEndHour 보정 포함) ──
+// override는 keyAddDays(getTodayKey(),1) = '논리적 내일'이므로,
+// 같은 좌표계인 getTodayKey()로 비교해야 한다. 실제 달력 날짜(new Date)로
+// 비교하면 dayEndHour>0 & 새벽 시간대에 마감 직후 즉시 해제되는 버그가 생긴다.
+function autoClearDayClose() {
+  if (dayCloseOverride && getTodayKey() >= dayCloseOverride) {
+    dayCloseOverride = null;
+    renderActiveTab(activeTab);
+  }
+}
+setInterval(autoClearDayClose, 30000);
 </script>
 
 <!-- ☁ Firebase 클라우드 동기화 (Realtime Database + Google 로그인) -->
