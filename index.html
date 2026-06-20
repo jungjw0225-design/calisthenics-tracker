@@ -2183,7 +2183,10 @@ function onForeground() {
   if (dateChanged) window.scrollTo(0, 0);
 }
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') { lastHidden = Date.now(); lastTodayKey = getTodayKey(); }
+  if (document.visibilityState === 'hidden') {
+    lastHidden = Date.now(); lastTodayKey = getTodayKey();
+    clearTimeout(saveTimer); saveData(); // 앱 백그라운드 시 즉시 저장
+  }
   else if (document.visibilityState === 'visible') onForeground();
 });
 window.addEventListener('pageshow', e => { if (e.persisted) onForeground(); });
