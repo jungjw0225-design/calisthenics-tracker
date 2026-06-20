@@ -2328,6 +2328,9 @@ setInterval(autoClearDayClose, 30000);
       }
     });
   }
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./service-worker.js');
+  }
 </script>
 </body>
 </html>
