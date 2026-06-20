@@ -1359,6 +1359,7 @@ function toggleTimer(stageId, i, btn) {
     btn.classList.add('running');
     timers[key] = { elapsed: 0, counting: true, iv: null };
     timers[key].iv = setInterval(() => {
+      if (!timers[key]) return;
       count--;
       if (count > 0) {
         input.value = count;
@@ -1369,6 +1370,7 @@ function toggleTimer(stageId, i, btn) {
         btn.textContent = '■';
         const start = Date.now();
         timers[key].iv = setInterval(() => {
+          if (!timers[key]) return;
           const e = Math.floor((Date.now() - start) / 1000);
           timers[key].elapsed = e;
           input.value = e;
