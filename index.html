@@ -1386,7 +1386,6 @@ function addSet(stageId) {
 }
 function removeSet(stageId, i) {
   const l = getOrCreateLog(stageId);
-  if(l.sets.length<=1) return;
   l.sets.splice(i,1); saveData(); renderTodayCards();
 }
 function saveStage(stageId) {
