@@ -537,6 +537,10 @@
 <div id="tab-today" class="tab-content active">
   <div id="dayCloseBar" style="display:flex;align-items:center;gap:10px;padding:14px 20px 0">
     <span id="todayDateLabel" style="font-size:12px;color:var(--text-dim);cursor:default"></span>
+    <span id="datePickWrap" style="position:relative;display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:7px;border:1px solid var(--border);background:var(--surface2);color:var(--accent);flex-shrink:0;cursor:pointer" title="날짜 선택 (과거 운동 기록)">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      <input type="date" id="datePickerInput" style="position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;-webkit-appearance:none;appearance:none">
+    </span>
     <button id="dayCloseBtn" class="cloud-btn" style="margin-left:auto" onclick="toggleDayClose()">하루 마감하기</button>
   </div>
   <div id="today-planche">
@@ -965,7 +969,8 @@ let historyFilter = 0;
 
 // ── 기능 2: 하루 마감하기 (세션 전용·서버 미저장) ──
 let dayCloseOverride = null;             // 'YYYY-MM-DD'(내일) 또는 null
-function activeDateKey() { return dayCloseOverride || getTodayKey(); }
+let activeDateOverride = null;           // 'YYYY-MM-DD'(과거 날짜 보기·세션 전용) 또는 null
+function activeDateKey() { return dayCloseOverride || activeDateOverride || getTodayKey(); }
 function dateKeyToObj(k){ return new Date(k + 'T00:00:00'); }
 function keyAddDays(k, n){
   const d = dateKeyToObj(k); d.setDate(d.getDate() + n);
@@ -1172,11 +1177,11 @@ function refreshDayCloseUI() {
   const btn = document.getElementById('dayCloseBtn');
   if (lbl) {
     lbl.textContent = formatDate(activeDateKey());
-    const closed = !!dayCloseOverride;
-    lbl.style.cursor = closed ? 'pointer' : 'default';
-    lbl.style.color  = closed ? 'var(--accent)' : 'var(--text-dim)';
-    lbl.title        = closed ? '눌러서 오늘로 돌아가기' : '';
-    lbl.onclick      = closed ? returnToToday : null;
+    const off = !!dayCloseOverride || !!activeDateOverride;   // 오늘이 아닌 날짜 보는 중
+    lbl.style.cursor = off ? 'pointer' : 'default';
+    lbl.style.color  = off ? 'var(--accent)' : 'var(--text-dim)';
+    lbl.title        = off ? '눌러서 오늘로 돌아가기' : '';
+    lbl.onclick      = off ? returnToToday : null;
   }
   if (btn) {
     btn.textContent = dayCloseOverride ? '마감 취소' : '하루 마감하기';
@@ -1190,11 +1195,33 @@ function toggleDayClose() {
   renderActiveTab(activeTab);   // 내부에서 refreshTodayBadge + refreshDayCloseUI 호출
 }
 function returnToToday() {
-  if (!dayCloseOverride) return;
+  if (!dayCloseOverride && !activeDateOverride) return;
   dayCloseOverride = null;
+  activeDateOverride = null;
   renderActiveTab(activeTab);
   showToast('오늘로 돌아왔어요');
 }
+
+// ── 과거 날짜 선택 (최근 30일, 미래 불가) ──
+function setupDatePicker() {
+  const input = document.getElementById('datePickerInput');
+  if (!input) return;
+  function refreshRange() {
+    const todayKey = getTodayKey();
+    input.max = todayKey;
+    input.min = keyAddDays(todayKey, -30);
+    input.value = activeDateOverride || todayKey;
+  }
+  input.addEventListener('focus', refreshRange);
+  input.addEventListener('click', refreshRange);
+  input.addEventListener('change', e => {
+    const val = e.target.value;
+    activeDateOverride = (val && val !== getTodayKey()) ? val : null;
+    dayCloseOverride = null;   // 과거 날짜를 직접 고르면 '하루 마감' 상태는 해제
+    renderActiveTab(activeTab);
+  });
+}
+setupDatePicker();
 
 // ─── 오늘 탭 ───
 function initStageSelect() {
