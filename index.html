@@ -1334,29 +1334,47 @@ function cycleQuality(stageId, i, btn) {
   autoSave();
 }
 
-// 내장 카운트업 타이머: 시작 → 입력칸에 실시간 표시, 정지 → 해당 세트에 초 기록
+// 내장 카운트업 타이머: 3초 카운트다운 후 시작, 정지 시 2초 차감
 function toggleTimer(stageId, i, btn) {
   const key = stageId + '-' + i;
   const input = btn.parentElement.querySelector('.set-input');
   if (timers[key]) {
-    const elapsed = timers[key].elapsed;
+    const isCounting = timers[key].counting;
+    const elapsed = isCounting ? 0 : Math.max(0, timers[key].elapsed - 2);
     clearInterval(timers[key].iv);
     delete timers[key];
     btn.textContent = '▶'; btn.classList.remove('running');
     input.readOnly = false;
-    // 1초 미만이면 빈 값 처리 (0초 기록이 '완료'로 잘못 표시되는 것 방지)
-    input.value = elapsed > 0 ? elapsed : '';
-    updateSet(stageId, i, elapsed > 0 ? String(elapsed) : '');
+    if (isCounting) {
+      input.value = '';
+    } else {
+      input.value = elapsed > 0 ? elapsed : '';
+      updateSet(stageId, i, elapsed > 0 ? String(elapsed) : '');
+    }
   } else {
-    const start = Date.now();
     input.readOnly = true;
-    btn.textContent = '■'; btn.classList.add('running');
-    timers[key] = { elapsed: 0, iv: null };
+    let count = 3;
+    input.value = count;
+    btn.textContent = count;
+    btn.classList.add('running');
+    timers[key] = { elapsed: 0, counting: true, iv: null };
     timers[key].iv = setInterval(() => {
-      const e = Math.floor((Date.now() - start) / 1000);
-      timers[key].elapsed = e;
-      input.value = e;
-    }, 200);
+      count--;
+      if (count > 0) {
+        input.value = count;
+        btn.textContent = count;
+      } else {
+        clearInterval(timers[key].iv);
+        timers[key].counting = false;
+        btn.textContent = '■';
+        const start = Date.now();
+        timers[key].iv = setInterval(() => {
+          const e = Math.floor((Date.now() - start) / 1000);
+          timers[key].elapsed = e;
+          input.value = e;
+        }, 200);
+      }
+    }, 1000);
   }
 }
 
@@ -2081,7 +2099,8 @@ function renderPullupHistory() {
       const q = s.quality ? `<span class="q-badge">${qIcon(s.quality)}</span>` : '';
       const hit = (s.target && v >= s.target) ? 'color:var(--success);font-weight:700' : '';
       const tgt = s.target ? `<span style="color:var(--text-muted);font-size:10px">/${s.target}</span>` : '';
-      return `<div class="pu-hist-set"><span style="color:var(--text-muted)">세트${i+1}</span> <span style="${hit}">${v||'-'}</span>${tgt}${q}</div>`;
+      const displayVal = (s.value !== '' && s.value !== null && s.value !== undefined) ? s.value : '-';
+      return `<div class="pu-hist-set"><span style="color:var(--text-muted)">세트${i+1}</span> <span style="${hit}">${displayVal}</span>${tgt}${q}</div>`;
     }).join('');
     const passBadge = l.passed === false
       ? ` <span style="color:var(--danger);font-size:11px;font-weight:600">· 미달</span>`
