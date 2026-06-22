@@ -285,7 +285,15 @@
     background: var(--surface); border: 1px solid var(--border);
     border-radius: var(--radius); padding: 12px 14px; margin-bottom: 6px;
   }
-  .history-entry-name { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+  .history-entry-name { font-size: 13px; font-weight: 600; margin-bottom: 8px; padding-right: 24px; }
+  .history-entry { position: relative; }
+  .hist-del {
+    position: absolute; top: 8px; right: 8px;
+    background: none; border: none; color: var(--text-muted);
+    font-size: 13px; cursor: pointer; padding: 4px; line-height: 1; opacity: 0.55;
+    transition: opacity 0.15s;
+  }
+  .hist-del:hover { opacity: 1; }
 
   /* 세트 시각화 바 */
   .set-bars { display: flex; flex-direction: column; gap: 5px; }
@@ -1701,6 +1709,7 @@ function renderHistoryList() {
           }).join('');
           return `
             <div class="history-entry">
+              <button class="hist-del" onclick="deletePlancheLog('${dateKey}', ${log.stageId})" title="기록 삭제">🗑</button>
               <div class="history-entry-name">#${stage.id} ${stage.name}</div>
               <div class="set-bars">${barsHtml}</div>
               <div class="history-best">최고 <strong>${best}${stage.unit}</strong> · ${vals.length}세트</div>
@@ -1714,6 +1723,35 @@ function renderHistoryList() {
 }
 
 function setHistoryFilter(id) { historyFilter=id; renderHistoryList(); }
+
+// 플란체: 특정 날짜·단계 기록 삭제
+function deletePlancheLog(dateKey, stageId) {
+  const arr = data.logs[dateKey];
+  if (!arr) return;
+  const stage = STAGES.find(s => s.id === stageId);
+  if (!confirm(`${formatDate(dateKey)}\n${stage ? '#'+stage.id+' '+stage.name : ''} 기록을 삭제할까요?`)) return;
+  data.logs[dateKey] = arr.filter(l => l.stageId !== stageId);
+  if (data.logs[dateKey].length === 0) delete data.logs[dateKey];
+  saveData();
+  renderHistory();
+  showToast('기록 삭제됨 🗑');
+}
+
+// 풀업: 특정 날짜 세션 삭제 (최근 완료 세션이면 Day 포인터를 되돌려 다시 할 수 있게)
+function deletePullupLog(dateKey) {
+  const logs = data.pullup.logs;
+  const l = logs[dateKey];
+  if (!l) return;
+  if (!confirm(`${formatDate(dateKey)}\n풀업 기록을 삭제할까요?`)) return;
+  const laterWorkout = Object.keys(logs).some(k => k > dateKey && puIsWorkout(logs[k]));
+  delete logs[dateKey];
+  if (l.advanced && !laterWorkout && typeof l.day === 'number') {
+    data.pullup.day = l.day; // 가장 최근 완료 세션 → 그 Day 다시 진행
+  }
+  saveData();
+  renderPullupHistory();
+  showToast('기록 삭제됨 🗑');
+}
 
 function renderHistory() {
   renderWeek();
@@ -2090,6 +2128,7 @@ function renderPullupHistory() {
         <div class="history-day">
           <div class="history-date">${formatDate(k)} · 극초보</div>
           <div class="history-entry">
+            <button class="hist-del" onclick="deletePullupLog('${k}')" title="기록 삭제">🗑</button>
             <div class="history-entry-name">${st ? st.name : '극초보 단계'} — <strong style="color:var(--accent)">${l.value}${st ? st.unit : ''}</strong></div>
             ${l.memo ? `<div class="history-memo">"${l.memo}"</div>` : ''}
           </div>
@@ -2111,6 +2150,7 @@ function renderPullupHistory() {
       <div class="history-day">
         <div class="history-date">${formatDate(k)} · ${l.level||''} Day ${l.day}${passBadge}</div>
         <div class="history-entry">
+          <button class="hist-del" onclick="deletePullupLog('${k}')" title="기록 삭제">🗑</button>
           <div class="history-entry-name">러시안 파이터 풀업 — 총 <strong style="color:var(--accent)">${total}</strong>개</div>
           <div class="pu-hist-sets">${rows}</div>
           ${l.memo ? `<div class="history-memo">"${l.memo}"</div>` : ''}
