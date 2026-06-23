@@ -1743,11 +1743,8 @@ function deletePullupLog(dateKey) {
   const l = logs[dateKey];
   if (!l) return;
   if (!confirm(`${formatDate(dateKey)}\n풀업 기록을 삭제할까요?`)) return;
-  const laterWorkout = Object.keys(logs).some(k => k > dateKey && puIsWorkout(logs[k]));
   delete logs[dateKey];
-  if (l.advanced && !laterWorkout && typeof l.day === 'number') {
-    data.pullup.day = l.day; // 가장 최근 완료 세션 → 그 Day 다시 진행
-  }
+  // 삭제는 기록만 지움 — Day 진행은 건드리지 않음 (프로그램 탭에서 Day를 직접 조정)
   saveData();
   renderPullupHistory();
   showToast('기록 삭제됨 🗑');
@@ -1991,10 +1988,26 @@ function renderProgram() {
   c.innerHTML = puLevelSelectHtml() + (isBeginner ? renderBeginnerRoadmap() : renderGridProgram());
 }
 
+// 현재 Day를 직접 설정 (프로그램 탭에서 Day 탭)
+function setPullupDay(day) {
+  const len = puProgLen();
+  if (!Number.isInteger(day) || day < 1 || day > len || data.pullup.day === day) return;
+  if (!confirm(`현재 Day를 Day ${day}로 설정할까요?`)) return;
+  data.pullup.day = day;
+  // 오늘 미완료 로그가 있으면 새 Day로 재생성되도록 제거
+  const tk = activeDateKey();
+  const l = data.pullup.logs[tk];
+  if (l && !l.beginner && !l.done) delete data.pullup.logs[tk];
+  saveData();
+  renderProgram();
+  showToast(`현재 Day ${day} 설정 ✓`);
+}
+
 function renderGridProgram() {
   const prog = puProgramFor(data.pullup.level);
   const cur = data.pullup.day;
-  return prog.map((base, idx) => {
+  const hint = `<div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">💡 Day를 탭하면 현재 Day로 설정돼요</div>`;
+  return hint + prog.map((base, idx) => {
     const day = idx + 1;
     const isRest = base === null;
     const isCur = day === cur;
@@ -2002,7 +2015,7 @@ function renderGridProgram() {
     const divider = (day === 31 && prog.length > 30)
       ? `<div class="section-divider" style="margin:14px 0 8px">── 30일 이후 · 이어가기 (15RM 준비) ──</div>`
       : '';
-    return divider + `<div class="pu-prog-row ${isCur?'current':''} ${isRest?'rest':''}">
+    return divider + `<div class="pu-prog-row ${isCur?'current':''} ${isRest?'rest':''}" style="cursor:pointer" onclick="setPullupDay(${day})" title="이 Day를 현재로 설정">
       <span class="pu-prog-day">Day ${day}</span>
       ${isRest ? '<span class="pu-prog-rest-label">😴 휴식</span>' : `<span class="pu-prog-reps">${base.join(' · ')}</span>`}
       ${isCur ? '<span style="margin-left:auto;font-size:11px;color:var(--accent);font-weight:700">오늘 ▶</span>' : ''}
