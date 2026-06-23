@@ -817,7 +817,7 @@ function syncExerciseConfig() {
 // (기존 data.currentStage / data.logs / data.pullup.* 참조가 현재 운동 상태를 가리킴)
 function installAccessors(d) {
   const cur = () => d.exercises[d.currentExercise];
-  ['currentStage','logs','milestones','level','day','beginnerStage'].forEach(k => {
+  ['currentStage','logs','milestones','level','beginnerStage'].forEach(k => {
     Object.defineProperty(d, k, { configurable:true, get(){ return cur()[k]; }, set(v){ cur()[k] = v; } });
   });
   Object.defineProperty(d, 'pullup', { configurable:true,
@@ -939,7 +939,7 @@ try {
   data = generateDemoData(); isDemo = true;
 }
 function freshPlanche() { return { currentStage: 1, logs: {}, milestones: [] }; }
-function freshPullup()  { return { level: '5RM', day: 1, beginnerStage: 1, logs: {} }; }
+function freshPullup()  { return { level: '5RM', beginnerStage: 1, logs: {} }; }
 
 function normalizeData() {
   // 구버전(평면 mode/currentStage/logs/pullup) → 신버전(exercises) 마이그레이션
@@ -962,7 +962,6 @@ function normalizeData() {
   if (!p.milestones) p.milestones = [];
   const u = data.exercises.pullup = data.exercises.pullup || {};
   if (!u.level || !PULLUP_TIERS[u.level]) u.level = '5RM';
-  if (!u.day) u.day = 1;
   if (!u.logs) u.logs = {};
   if (!u.beginnerStage) u.beginnerStage = 1;
   if (!data.settings) data.settings = {};
@@ -1737,24 +1736,16 @@ function deletePlancheLog(dateKey, stageId) {
   showToast('기록 삭제됨 🗑');
 }
 
-// 풀업: 특정 날짜 세션 삭제 (최근 완료 세션이면 Day 포인터를 되돌려 다시 할 수 있게)
+// 풀업: 특정 날짜 세션 삭제 (진행 Day는 통과 기록에서 자동 계산되므로 별도 롤백 불필요)
 function deletePullupLog(dateKey) {
   const logs = data.pullup.logs;
   const l = logs[dateKey];
   if (!l) return;
   if (!confirm(`${formatDate(dateKey)}\n풀업 기록을 삭제할까요?`)) return;
-  // 가장 최근 '완료(진행)' 세션을 지우면 = 진행 취소 → 그 Day로 되돌려 다시 할 수 있게.
-  // 과거/중간 기록 삭제는 진행에 영향 없음.
-  const laterWorkout = Object.keys(logs).some(k => k > dateKey && puIsWorkout(logs[k]));
   delete logs[dateKey];
-  let rolledBack = null;
-  if (l.advanced && !laterWorkout && typeof l.day === 'number') {
-    data.pullup.day = l.day;
-    rolledBack = l.day;
-  }
   saveData();
   renderPullupHistory();
-  showToast(rolledBack ? `기록 삭제 · Day ${rolledBack}로 되돌림` : '기록 삭제됨 🗑');
+  showToast('기록 삭제됨 🗑');
 }
 
 function renderHistory() {
@@ -1777,13 +1768,32 @@ function puTargets(day) {
   return base ? base.slice() : null;
 }
 function puNextDay(d) { const len = puProgLen() || 30; return d >= len ? 1 : d + 1; }
+// 레벨 지정판 puNextDay. 폴백 30은 cycle 없는 비정상 레벨에만 닿음(3RM=12 등 실제 길이는 puProgramFor가 제공).
+function puNextDayFor(level, d) { const p = puProgramFor(level); const len = (p ? p.length : 0) || 30; return d >= len ? 1 : d + 1; }
+// 모든 풀업 로그에 '통과 횟수' 기반 위치(Day)를 유도한다(저장된 l.day는 신뢰하지 않음).
+// 비-극초보 로그만 날짜 오름차순으로 순회하며 레벨별 expected Day를 부여하고, advanced일 때만 한 칸 전진.
+function puDayMap() {
+  const logs = data.pullup.logs;
+  const keys = Object.keys(logs).filter(k => { const l = logs[k]; return l && !l.beginner; }).sort();
+  const expected = {}, map = {};
+  for (const k of keys) {
+    const l = logs[k];
+    const lv = l.level || data.pullup.level;
+    if (expected[lv] == null) expected[lv] = 1;
+    map[k] = expected[lv];
+    if (l.advanced) expected[lv] = puNextDayFor(lv, expected[lv]);
+  }
+  return { map, expected };
+}
+// 현재 레벨에서 다음에 할 Day(통과 기록 기반)
+function puCurrentDay() { const { expected } = puDayMap(); return expected[data.pullup.level] || 1; }
 
 function getPullupLog() {
   const today = activeDateKey();
   const ex = data.pullup.logs[today];
   // 유효한 그리드 로그(휴식 or sets 보유, 극초보 아님)면 그대로 사용
-  if (ex && !ex.beginner && (ex.rest || ex.sets)) return ex;
-  const day = data.pullup.day;
+  if (ex && !ex.beginner && ex.level === data.pullup.level && (ex.rest || ex.sets)) return ex;
+  const day = puCurrentDay();
   const targets = puTargets(day);
   data.pullup.logs[today] = targets
     ? { level: data.pullup.level, day, rest: false, done: false, sets: targets.map(t => ({ target: t, value: '', quality: null })), memo: '' }
@@ -1803,7 +1813,6 @@ function puLevelSelectHtml() {
 function setLevel(level) {
   if (!PULLUP_TIERS[level]) return;
   data.pullup.level = level;
-  data.pullup.day = 1;
   // 오늘 로그가 미완료이거나 새 수준과 종류(극초보/그리드)가 다르면 제거 → 새 프로그램으로 재생성
   const today = activeDateKey();
   const l = data.pullup.logs[today];
@@ -1872,14 +1881,13 @@ function completeToday() {
   const passed = l.rest || puDayPassed(l);
   l.passed = passed;
   if (passed && !l.advanced) {
-    // 통과 → 다음 Day로 진행 (한 번만)
+    // 통과 → 다음 Day로 진행 (한 번만). advanced를 먼저 켠 뒤 puCurrentDay()로 다음 Day 계산.
     l.advanced = true;
-    data.pullup.day = puNextDay(l.day);
-    showToast(l.rest ? `휴식 완료 · 다음 Day ${data.pullup.day}` : `통과! 💪 다음 Day ${data.pullup.day}`);
+    const nextDay = puCurrentDay();
+    showToast(l.rest ? `휴식 완료 · 다음 Day ${nextDay}` : `통과! 💪 다음 Day ${nextDay}`);
   } else if (!passed && l.advanced) {
     // 이전엔 통과로 진행했으나 수정 후 미달 → 되돌려 같은 Day 유지
     l.advanced = false;
-    data.pullup.day = l.day;
     showToast(`목표 미달로 변경 · Day ${l.day} 유지`);
   } else if (!passed) {
     // 목표 미달 → 진행 없이 같은 Day 반복
@@ -1922,7 +1930,7 @@ function renderGridToday() {
         <div class="pu-rest-text">휴식일입니다.<br>회복도 훈련의 일부예요.</div>
       </div>
       <button class="save-btn ${log.done ? 'saved' : ''}" onclick="completeToday()">
-        ${log.done ? `✓ 완료됨 (다음 Day ${data.pullup.day})` : '휴식 완료 →'}
+        ${log.done ? `✓ 완료됨 (다음 Day ${puCurrentDay()})` : '휴식 완료 →'}
       </button>`;
   }
 
@@ -1937,7 +1945,7 @@ function renderGridToday() {
     </div>`).join('');
 
   const doneLabel = log.done
-    ? (log.passed ? `✓ 통과 (다음 Day ${data.pullup.day})` : `△ 미달 — Day ${log.day} 재도전`)
+    ? (log.passed ? `✓ 통과 (다음 Day ${puCurrentDay()})` : `△ 미달 — Day ${log.day} 재도전`)
     : '오늘 운동 완료 →';
   return bridgeNote + dayBar + `
     <div class="chart-card">
@@ -1995,26 +2003,10 @@ function renderProgram() {
   c.innerHTML = puLevelSelectHtml() + (isBeginner ? renderBeginnerRoadmap() : renderGridProgram());
 }
 
-// 현재 Day를 직접 설정 (프로그램 탭에서 Day 탭)
-function setPullupDay(day) {
-  const len = puProgLen();
-  if (!Number.isInteger(day) || day < 1 || day > len || data.pullup.day === day) return;
-  if (!confirm(`현재 Day를 Day ${day}로 설정할까요?`)) return;
-  data.pullup.day = day;
-  // 오늘 미완료 로그가 있으면 새 Day로 재생성되도록 제거
-  const tk = activeDateKey();
-  const l = data.pullup.logs[tk];
-  if (l && !l.beginner && !l.done) delete data.pullup.logs[tk];
-  saveData();
-  renderProgram();
-  showToast(`현재 Day ${day} 설정 ✓`);
-}
-
 function renderGridProgram() {
   const prog = puProgramFor(data.pullup.level);
-  const cur = data.pullup.day;
-  const hint = `<div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">💡 Day를 탭하면 현재 Day로 설정돼요</div>`;
-  return hint + prog.map((base, idx) => {
+  const cur = puCurrentDay();
+  return prog.map((base, idx) => {
     const day = idx + 1;
     const isRest = base === null;
     const isCur = day === cur;
@@ -2022,7 +2014,7 @@ function renderGridProgram() {
     const divider = (day === 31 && prog.length > 30)
       ? `<div class="section-divider" style="margin:14px 0 8px">── 30일 이후 · 이어가기 (15RM 준비) ──</div>`
       : '';
-    return divider + `<div class="pu-prog-row ${isCur?'current':''} ${isRest?'rest':''}" style="cursor:pointer" onclick="setPullupDay(${day})" title="이 Day를 현재로 설정">
+    return divider + `<div class="pu-prog-row ${isCur?'current':''} ${isRest?'rest':''}">
       <span class="pu-prog-day">Day ${day}</span>
       ${isRest ? '<span class="pu-prog-rest-label">😴 휴식</span>' : `<span class="pu-prog-reps">${base.join(' · ')}</span>`}
       ${isCur ? '<span style="margin-left:auto;font-size:11px;color:var(--accent);font-weight:700">오늘 ▶</span>' : ''}
@@ -2103,6 +2095,7 @@ function trendChartSvg(points, unit, W) {
 
 function renderPullupHistory() {
   const c = document.getElementById('history-pullup');
+  const { map } = puDayMap();  // 통과 기록 기반 Day 표시(저장 l.day 미신뢰)
   const workoutDays = puWorkoutDays();
   const streak = calcPullupStreak();
   const totalDays = workoutDays.length;
@@ -2168,7 +2161,7 @@ function renderPullupHistory() {
       : (l.passed ? ` <span style="color:var(--success);font-size:11px;font-weight:600">· 통과</span>` : '');
     return `
       <div class="history-day">
-        <div class="history-date">${formatDate(k)} · ${l.level||''} Day ${l.day}${passBadge}</div>
+        <div class="history-date">${formatDate(k)} · ${l.level||''} Day ${map[k]||l.day}${passBadge}</div>
         <div class="history-entry">
           <button class="hist-del" onclick="deletePullupLog('${k}')" title="기록 삭제">🗑</button>
           <div class="history-entry-name">러시안 파이터 풀업 — 총 <strong style="color:var(--accent)">${total}</strong>개</div>
@@ -2182,7 +2175,7 @@ function renderPullupHistory() {
   const tier = puGetTier(data.pullup.level);
   const progressLabel = tier.kind === 'beginner'
     ? `현재 ${(PULLUP_BEGINNER.find(s => s.id === data.pullup.beginnerStage)||{}).name || '극초보'}`
-    : `현재 ${data.pullup.level} · Day ${data.pullup.day}/${puProgLen()}`;
+    : `현재 ${data.pullup.level} · Day ${puCurrentDay()}/${puProgLen()}`;
 
   c.innerHTML = `
     <div class="week-card">
