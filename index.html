@@ -1743,11 +1743,18 @@ function deletePullupLog(dateKey) {
   const l = logs[dateKey];
   if (!l) return;
   if (!confirm(`${formatDate(dateKey)}\n풀업 기록을 삭제할까요?`)) return;
+  // 가장 최근 '완료(진행)' 세션을 지우면 = 진행 취소 → 그 Day로 되돌려 다시 할 수 있게.
+  // 과거/중간 기록 삭제는 진행에 영향 없음.
+  const laterWorkout = Object.keys(logs).some(k => k > dateKey && puIsWorkout(logs[k]));
   delete logs[dateKey];
-  // 삭제는 기록만 지움 — Day 진행은 건드리지 않음 (프로그램 탭에서 Day를 직접 조정)
+  let rolledBack = null;
+  if (l.advanced && !laterWorkout && typeof l.day === 'number') {
+    data.pullup.day = l.day;
+    rolledBack = l.day;
+  }
   saveData();
   renderPullupHistory();
-  showToast('기록 삭제됨 🗑');
+  showToast(rolledBack ? `기록 삭제 · Day ${rolledBack}로 되돌림` : '기록 삭제됨 🗑');
 }
 
 function renderHistory() {
