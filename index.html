@@ -1791,13 +1791,27 @@ function puCurrentDay() { const { expected } = puDayMap(); return expected[data.
 function getPullupLog() {
   const today = activeDateKey();
   const ex = data.pullup.logs[today];
-  // 유효한 그리드 로그(휴식 or sets 보유, 극초보 아님)면 그대로 사용
-  if (ex && !ex.beginner && ex.level === data.pullup.level && (ex.rest || ex.sets)) return ex;
-  const day = puCurrentDay();
-  const targets = puTargets(day);
+  const curDay = puCurrentDay();
+  if (ex && !ex.beginner && ex.level === data.pullup.level && (ex.rest || ex.sets)) {
+    // 완료된 오늘 기록은 그 날의 확정 결과이므로 그대로 둔다.
+    // 미완료 기록은 현재 유도 Day(통과 기록 기반)에 맞춰 Day/목표를 갱신(입력값은 인덱스대로 보존).
+    if (ex.done || ex.day === curDay) return ex;
+    const targets = puTargets(curDay);
+    if (targets) {
+      const old = ex.sets || [];
+      ex.sets = targets.map((t, i) => ({ target: t, value: (old[i] && old[i].value) || '', quality: (old[i] && old[i].quality) || null }));
+      ex.rest = false;
+    } else {
+      delete ex.sets;
+      ex.rest = true;
+    }
+    ex.day = curDay;
+    return ex;
+  }
+  const targets = puTargets(curDay);
   data.pullup.logs[today] = targets
-    ? { level: data.pullup.level, day, rest: false, done: false, sets: targets.map(t => ({ target: t, value: '', quality: null })), memo: '' }
-    : { level: data.pullup.level, day, rest: true, done: false, memo: '' };
+    ? { level: data.pullup.level, day: curDay, rest: false, done: false, sets: targets.map(t => ({ target: t, value: '', quality: null })), memo: '' }
+    : { level: data.pullup.level, day: curDay, rest: true, done: false, memo: '' };
   return data.pullup.logs[today];
 }
 
