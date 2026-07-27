@@ -2434,13 +2434,13 @@ function freeAddSet(itemId) {
   if (!e) return;
   const it = freeItem(itemId);
   const last = e.sets[e.sets.length - 1];
-  // 무게는 이전 세트에서 이어받기 · 좌/우(alt) 종목은 구분 자동 교대, 그 외는 유지
+  // 무게·횟수는 이전 세트에서 이어받기 · 좌/우(alt) 종목은 구분 자동 교대, 그 외는 유지
   let v = null;
   if (it && it.variants) {
     const cur = (last && last.v) || it.variants[0];
     v = it.alt ? it.variants[(it.variants.indexOf(cur) + 1) % it.variants.length] : cur;
   }
-  e.sets.push({ w: last ? last.w : '', r:'', v, quality:null });
+  e.sets.push({ w: last ? last.w : '', r: last ? last.r : '', v, quality:null });
   saveData(); renderFreeToday();
 }
 function freeRemoveSet(itemId, i) {
