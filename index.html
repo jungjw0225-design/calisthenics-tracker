@@ -525,6 +525,33 @@
     font-size:11.5px; color:var(--text-dim); line-height:1.6;
     margin-bottom:8px; word-break:keep-all; font-style:italic;
   }
+
+  /* ── 종목 동작 사진 ── */
+  /* 오늘 탭 카드 헤더의 아이콘 자리를 대체하는 썸네일 */
+  .stage-num.has-img { background:none; padding:0; overflow:hidden; border-radius:8px; width:34px; height:34px; }
+  .stage-num.has-img img { width:100%; height:100%; object-fit:cover; display:block; }
+  /* 종목 관리 탭 행의 썸네일 / 사진 없을 때의 자리표시 */
+  .free-thumb {
+    width:44px; height:44px; border-radius:8px; flex-shrink:0; overflow:hidden;
+    background:var(--surface2); border:1px solid var(--border); cursor:pointer;
+    display:flex; align-items:center; justify-content:center; padding:0;
+  }
+  .free-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+  .free-thumb.empty { border-style:dashed; color:var(--text-muted); font-size:16px; }
+  .free-img-actions { display:flex; flex-direction:column; gap:3px; flex-shrink:0; }
+  .free-img-btn {
+    background:var(--surface2); border:1px solid var(--border); border-radius:6px;
+    color:var(--text-dim); font-size:10px; padding:3px 6px; cursor:pointer; font-family:inherit;
+  }
+  .free-img-btn:hover { border-color:var(--accent); color:var(--accent); }
+  /* 사진 크게 보기 */
+  .img-lightbox {
+    display:none; position:fixed; inset:0; z-index:100; background:#000000e8;
+    align-items:center; justify-content:center; flex-direction:column; gap:12px; padding:20px;
+  }
+  .img-lightbox.show { display:flex; }
+  .img-lightbox img { max-width:100%; max-height:78vh; border-radius:12px; }
+  .img-lightbox-cap { color:var(--text); font-size:14px; font-weight:600; text-align:center; }
 </style>
 </head>
 <body>
@@ -631,6 +658,12 @@
 
 <div class="toast" id="toast"></div>
 <input type="file" id="importFile" accept="application/json" style="display:none" onchange="importData(this)">
+<!-- 종목 동작 사진: 폰 사진첩/카메라에서 선택 (freePickImage에서 onchange를 그때그때 연결) -->
+<input type="file" id="freeImgInput" accept="image/*" style="display:none">
+<div class="img-lightbox" id="imgLightbox" onclick="freeHideImage()">
+  <img id="imgLightboxImg" alt="">
+  <div class="img-lightbox-cap" id="imgLightboxCap"></div>
+</div>
 
 <script>
 // 플란체 12단계 로드맵 — 권위 출처(Overcoming Gravity·FitnessFAQs·GMB·Calisthenics Association 등) 종합 + 적대 검증
@@ -807,11 +840,13 @@ function puGetTier(level) { return PULLUP_TIERS[level] || PULLUP_TIERS['5RM']; }
 // 덤벨(자유 기록형) 기본 종목 프리셋 — 종목 관리 탭에서 추가/삭제 가능
 // cat: warmup/main/aux 카테고리 · variants: 세트별 구분(좌/우, 정자세/무릎 등)
 // alt: 세트 추가 시 구분 자동 교대(좌↔우) · unit: 횟수 단위(기본 '회', 시간 종목은 '초')
-const FREE_CATS = [
+const DUMBBELL_CATS = [
   { key:'warmup', label:'워밍업' },
   { key:'main',   label:'메인' },
   { key:'aux',    label:'보조' }
 ];
+// 현재 운동의 카테고리 — syncExerciseConfig()에서 재바인딩되므로 let
+let FREE_CATS = DUMBBELL_CATS;
 const DUMBBELL_PRESETS = [
   { name:'팔 돌리기',            cat:'warmup' },
   { name:'가슴 스트레치',        cat:'warmup', variants:['좌','우'], alt:true, unit:'초' },
@@ -828,20 +863,44 @@ const DUMBBELL_PRESETS = [
   { name:'스캐퓰러 풀',          cat:'aux' },
   { name:'데드행',               cat:'aux',    unit:'초' }
 ];
-function freePresetItems() {
-  return DUMBBELL_PRESETS.map((p, i) => ({ id: i + 1, unit: '회', ...p }));
+function freePresetItems(presets = DUMBBELL_PRESETS) {
+  return presets.map((p, i) => ({ id: i + 1, unit: '회', ...p }));
 }
+
+// 스트레칭 기본 종목 — 전부 시간(초) 기준 유지 동작. 종목마다 동작 사진(item.img)을 붙일 수 있다.
+const STRETCH_CATS = [
+  { key:'upper', label:'목·어깨' },
+  { key:'trunk', label:'등·허리' },
+  { key:'lower', label:'하체' }
+];
+const STRETCH_PRESETS = [
+  { name:'오버헤드 스트레칭',   cat:'upper', unit:'초' },
+  { name:'목 옆으로 늘이기',     cat:'upper', variants:['좌','우'], alt:true, unit:'초' },
+  { name:'가슴 열기(문틀)',      cat:'upper', variants:['좌','우'], alt:true, unit:'초' },
+  { name:'어깨 뒤로 당기기',     cat:'upper', variants:['좌','우'], alt:true, unit:'초' },
+  { name:'캣카우',              cat:'trunk', unit:'초' },
+  { name:'차일드 포즈',          cat:'trunk', unit:'초' },
+  { name:'누워서 허리 비틀기',   cat:'trunk', variants:['좌','우'], alt:true, unit:'초' },
+  { name:'코브라',              cat:'trunk', unit:'초' },
+  { name:'햄스트링 스트레칭',    cat:'lower', variants:['좌','우'], alt:true, unit:'초' },
+  { name:'고관절 굴곡근(런지)',  cat:'lower', variants:['좌','우'], alt:true, unit:'초' },
+  { name:'비둘기 자세',          cat:'lower', variants:['좌','우'], alt:true, unit:'초' },
+  { name:'종아리 스트레칭',      cat:'lower', variants:['좌','우'], alt:true, unit:'초' }
+];
 
 // ════════════ 운동 레지스트리 (운동 추가 = 여기에 항목 추가) ════════════
 // type:'skill'  → 단계 로드맵형 (플란체 등). stages/principles 제공.
 // type:'program'→ 렙 프로그램형 (풀업 등). tiers/levels/beginner 제공.
-// type:'free'   → 자유 기록형 (덤벨 등). 종목 목록 + 무게×횟수 세트 기록.
+// type:'free'   → 자유 기록형 (덤벨·스트레칭 등). 종목 목록 + 무게×횟수 세트 기록.
+//                 cats: 카테고리 목록 · noWeight: 무게(kg) 입력 숨김(스트레칭처럼 시간만 재는 종목)
 const EXERCISES = [
   { id:'planche', name:'플란체', icon:'🤸', type:'skill',
     midLabel:'로드맵', stages: STAGES, principles: PLANCHE_PRINCIPLES },
   { id:'pullup', name:'러시안 파이터 풀업', short:'풀업', icon:'💪', type:'program',
     midLabel:'프로그램', tiers: PULLUP_TIERS, levels: PULLUP_LEVELS, beginner: PULLUP_BEGINNER },
-  { id:'dumbbell', name:'덤벨', icon:'🏋️', type:'free', midLabel:'종목 관리' }
+  { id:'dumbbell', name:'덤벨', icon:'🏋️', type:'free', midLabel:'종목 관리', cats: DUMBBELL_CATS },
+  { id:'stretch', name:'스트레칭', icon:'🧘', type:'free', midLabel:'종목 관리',
+    cats: STRETCH_CATS, noWeight: true }
 ];
 function CUR() { return EXERCISES.find(e => e.id === data.currentExercise) || EXERCISES[0]; }
 
@@ -852,6 +911,8 @@ function syncExerciseConfig() {
     STAGES = ex.stages; PLANCHE_PRINCIPLES = ex.principles;
   } else if (ex.type === 'program') {
     PULLUP_TIERS = ex.tiers; PULLUP_LEVELS = ex.levels; PULLUP_BEGINNER = ex.beginner;
+  } else if (ex.type === 'free') {
+    FREE_CATS = ex.cats || DUMBBELL_CATS;
   }
 }
 
@@ -1028,6 +1089,13 @@ function freshDumbbell() {
     logs: {}
   };
 }
+function freshStretch() {
+  return {
+    items: freePresetItems(STRETCH_PRESETS),
+    nextId: STRETCH_PRESETS.length + 1,
+    logs: {}
+  };
+}
 
 function normalizeData() {
   // 구버전(평면 mode/currentStage/logs/pullup) → 신버전(exercises) 마이그레이션
@@ -1065,6 +1133,10 @@ function normalizeData() {
   }
   if (!f.logs) f.logs = {};
   if (!f.nextId) f.nextId = f.items.reduce((m, it) => Math.max(m, it.id), 0) + 1;
+  const s = data.exercises.stretch = data.exercises.stretch || freshStretch();
+  if (!s.items || !s.items.length) s.items = freePresetItems(STRETCH_PRESETS);
+  if (!s.logs) s.logs = {};
+  if (!s.nextId) s.nextId = s.items.reduce((m, it) => Math.max(m, it.id), 0) + 1;
   if (!data.settings) data.settings = {};
   dayEndHour = data.settings.dayEndHour || 0;
   installAccessors(data);
@@ -1095,7 +1167,7 @@ window.startFresh = () => {
   const prevDayEndHour = dayEndHour; // 기기 마감시간 설정은 초기화 시에도 보존
   data = {
     currentExercise: data.currentExercise || 'planche',
-    exercises: { planche: freshPlanche(), pullup: freshPullup(), dumbbell: freshDumbbell() },
+    exercises: { planche: freshPlanche(), pullup: freshPullup(), dumbbell: freshDumbbell(), stretch: freshStretch() },
     settings: { dayEndHour: prevDayEndHour },
     updatedAt: 0
   };
@@ -1106,10 +1178,15 @@ let chartMetric = 'best';
 let saveTimer = null, toastTimer = null;
 const timers = {};
 
+// 저장 성공 여부를 반환한다. 사진처럼 용량이 큰 데이터는 저장에 실패할 수 있어
+// (localStorage 용량 초과) 호출부에서 되돌릴 수 있어야 한다.
 function saveData() {
   data.updatedAt = Date.now();
-  try { localStorage.setItem('planche_data', JSON.stringify(data)); } catch (e) {}
+  let ok = true;
+  try { localStorage.setItem('planche_data', JSON.stringify(data)); }
+  catch (e) { ok = false; }
   if (window.cloudSave) window.cloudSave();
+  return ok;
 }
 
 // 자동저장: 입력 변경 시 debounce 500ms 후 저장
@@ -1130,7 +1207,7 @@ function clearDemo() {
     const prevDayEndHour = dayEndHour; // 기기 마감시간 설정은 초기화 시에도 보존
     data = {
       currentExercise: data.currentExercise || 'planche',
-      exercises: { planche: freshPlanche(), pullup: freshPullup(), dumbbell: freshDumbbell() },
+      exercises: { planche: freshPlanche(), pullup: freshPullup(), dumbbell: freshDumbbell(), stretch: freshStretch() },
       settings: { dayEndHour: prevDayEndHour },
       updatedAt: 0
     };
@@ -2337,6 +2414,78 @@ function freeSetValid(s) { return (parseFloat(s.r) || 0) > 0; }
 function freeEntryDone(e) { return !!e.sets && e.sets.some(freeSetValid); }
 function freeIsWorkoutDay(k) { const arr = freeState().logs[k]; return !!arr && arr.some(freeEntryDone); }
 function freeItem(id) { return freeState().items.find(i => i.id === id); }
+
+// ── 종목 동작 사진 (item.img = 압축된 JPEG data URL) ──
+// 이름만 보고 무슨 동작인지 모르는 문제를 사진으로 해결. 사진첩/카메라에서 직접 고른다.
+// localStorage(≈5MB)와 클라우드 blob에 같이 실려가므로 긴 변 480px·품질 0.7로 강하게 압축한다.
+const IMG_MAX_PX = 480, IMG_QUALITY = 0.7;
+function freeCompressImage(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('사진을 읽지 못했어요'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('사진을 열지 못했어요'));
+      img.onload = () => {
+        const scale = Math.min(1, IMG_MAX_PX / Math.max(img.width, img.height));
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
+        const cv = document.createElement('canvas');
+        cv.width = w; cv.height = h;
+        const ctx = cv.getContext('2d');
+        ctx.fillStyle = '#fff';   // 투명 PNG가 JPEG로 바뀔 때 검게 되는 것 방지
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(cv.toDataURL('image/jpeg', IMG_QUALITY));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+function freePickImage(itemId) {
+  const input = document.getElementById('freeImgInput');
+  input.onchange = async () => {
+    const file = input.files && input.files[0];
+    input.value = '';   // 같은 파일을 다시 골라도 change가 발생하도록 비움
+    if (!file) return;
+    const it = freeItem(itemId);
+    if (!it) return;
+    showToast('사진 처리 중…');
+    try {
+      const prev = it.img;
+      it.img = await freeCompressImage(file);
+      if (saveData()) showToast('사진 저장됨 📷');
+      else {
+        // 저장 공간 초과 — 사진을 되돌려 기존 운동 기록이 저장 불가 상태가 되지 않게 한다
+        if (prev) it.img = prev; else delete it.img;
+        saveData();
+        showToast('저장 공간이 부족해 사진을 넣지 못했어요');
+      }
+    } catch (e) {
+      showToast(e.message || '사진을 넣지 못했어요');
+    }
+    renderActiveTab(activeTab);
+  };
+  input.click();
+}
+function freeRemoveImage(itemId) {
+  const it = freeItem(itemId);
+  if (!it || !it.img) return;
+  if (!confirm(`${it.name}\n사진을 지울까요?`)) return;
+  delete it.img;
+  saveData();
+  renderActiveTab(activeTab);
+  showToast('사진 삭제됨 🗑');
+}
+function freeShowImage(itemId) {
+  const it = freeItem(itemId);
+  if (!it || !it.img) return;
+  document.getElementById('imgLightboxImg').src = it.img;
+  document.getElementById('imgLightboxCap').textContent = it.name;
+  document.getElementById('imgLightbox').classList.add('show');
+}
+function freeHideImage() { document.getElementById('imgLightbox').classList.remove('show'); }
 // 종목 이름/단위: 목록 우선, 삭제된 종목은 기록 당시 스냅샷(name/unit) 사용
 function freeItemName(e) {
   const it = freeItem(e.itemId);
@@ -2490,6 +2639,8 @@ function freePrevText(pe, unit) {
 
 function renderFreeToday() {
   const st = freeState();
+  const ex = CUR();
+  const noWeight = !!ex.noWeight;   // 스트레칭처럼 무게 개념이 없는 운동은 kg 칸을 숨긴다
   const today = activeDateKey();
   const entries = st.logs[today] || [];
   const usedIds = entries.map(e => e.itemId);
@@ -2522,9 +2673,9 @@ function renderFreeToday() {
       <div class="set-row">
         <span class="set-label">세트 ${i+1}</span>
         ${variants ? `<button class="set-variant" onclick="freeCycleVariant(${e.itemId},${i},this)" title="${escHtml(s.v || variants[0])} (눌러서 전환)">${escHtml((s.v || variants[0])[0])}</button>` : ''}
-        <input class="set-input" type="number" inputmode="decimal" step="0.5" min="0" placeholder="kg"
+        ${noWeight ? '' : `<input class="set-input" type="number" inputmode="decimal" step="0.5" min="0" placeholder="kg"
           value="${s.w || ''}" oninput="freeUpdateSet(${e.itemId},${i},'w',this.value)">
-        <span class="set-unit">kg</span>
+        <span class="set-unit">kg</span>`}
         <input class="set-input" type="number" inputmode="numeric" min="0" placeholder="${unit}"
           value="${s.r || ''}" oninput="freeUpdateSet(${e.itemId},${i},'r',this.value)">
         <span class="set-unit">${unit}</span>
@@ -2534,10 +2685,15 @@ function renderFreeToday() {
     const statLine = done
       ? `<div class="history-best">${freeStatLine(e, prev && prev.e)}</div>`
       : '';
+    // 사진이 있으면 아이콘 자리에 썸네일 — 눌러서 크게 보기 (카드 접기와 겹치지 않게 stopPropagation)
+    const icon = it && it.img
+      ? `<div class="stage-num has-img" title="사진 크게 보기"
+           onclick="event.stopPropagation();freeShowImage(${e.itemId})"><img src="${escHtml(it.img)}" alt=""></div>`
+      : `<div class="stage-num">${ex.icon}</div>`;
     return `
       <div class="stage-card ${done ? 'completed-today' : 'current'}" id="free-card-${e.itemId}">
         <div class="stage-header" onclick="toggleFreeCard(${e.itemId})">
-          <div class="stage-num">🏋️</div>
+          ${icon}
           <div class="stage-info">
             <div class="stage-name">${name}</div>
             <div class="stage-target">${prevText}</div>
@@ -2546,7 +2702,7 @@ function renderFreeToday() {
           <button class="set-remove" title="오늘 목록에서 빼기" onclick="event.stopPropagation();freeRemoveEntry(${e.itemId})">×</button>
         </div>
         <div class="stage-body open" id="free-body-${e.itemId}">
-          <div class="sets-label">세트 기록 (무게 × ${unit === '초' ? '시간' : '횟수'})</div>
+          <div class="sets-label">세트 기록 (${noWeight ? '' : '무게 × '}${unit === '초' ? '시간' : '횟수'})</div>
           <div class="sets-list">${setsHtml}</div>
           <button class="add-set-btn" onclick="freeAddSet(${e.itemId})">+ 세트 추가</button>
           ${statLine}
@@ -2558,7 +2714,7 @@ function renderFreeToday() {
   }).join('');
 
   const empty = entries.length ? '' : `
-    <div class="empty-state">위에서 종목을 골라<br>오늘 덤벨 운동을 시작해 보세요 🏋️</div>`;
+    <div class="empty-state">위에서 종목을 골라<br>오늘 ${escHtml(ex.short || ex.name)}을 시작해 보세요 ${ex.icon}</div>`;
   document.getElementById('today-free').innerHTML = picker + cards + empty;
 }
 
@@ -2611,12 +2767,23 @@ function renderFreeManage() {
         ? `${b.bestW > 0 ? `최고 ${b.bestW}kg` : `최고 ${b.bestR}${unit}`} · 총 ${b.sessions}회 세션`
         : '아직 기록 없음';
       const meta = (it.variants ? ` · ${it.variants.join('/')}` : '') + (unit === '초' ? ' · 초 단위' : '');
+      // 동작 사진: 있으면 눌러서 크게 보기 + 교체/삭제, 없으면 📷 자리를 눌러 바로 넣기
+      const thumb = it.img
+        ? `<button class="free-thumb" onclick="freeShowImage(${it.id})" title="사진 크게 보기"><img src="${escHtml(it.img)}" alt="${escHtml(it.name)}"></button>`
+        : `<button class="free-thumb empty" onclick="freePickImage(${it.id})" title="동작 사진 넣기">📷</button>`;
+      const imgBtns = it.img ? `
+        <div class="free-img-actions">
+          <button class="free-img-btn" onclick="freePickImage(${it.id})">교체</button>
+          <button class="free-img-btn" onclick="freeRemoveImage(${it.id})">사진 삭제</button>
+        </div>` : '';
       return `
         <div class="pu-prog-row">
+          ${thumb}
           <div style="flex:1;min-width:0">
             <div style="font-size:13px;font-weight:600">${escHtml(it.name)}</div>
             <div style="font-size:11px;color:var(--text-dim)">${rec}${escHtml(meta)}</div>
           </div>
+          ${imgBtns}
           <button class="hist-del" style="position:static;flex-shrink:0" onclick="freeDeleteItem(${it.id})" title="종목 삭제">🗑</button>
         </div>`;
     }).join('');
@@ -2669,7 +2836,7 @@ function deleteFreeLog(dateKey, itemId) {
   const arr = st.logs[dateKey];
   if (!arr) return;
   const e = arr.find(x => x.itemId === itemId);
-  if (!confirm(`${formatDate(dateKey)}\n${e ? freeItemName(e) : '덤벨'} 기록을 삭제할까요?`)) return;
+  if (!confirm(`${formatDate(dateKey)}\n${e ? freeItemName(e) : (CUR().short || CUR().name)} 기록을 삭제할까요?`)) return;
   st.logs[dateKey] = arr.filter(x => x.itemId !== itemId);
   if (!st.logs[dateKey].length) delete st.logs[dateKey];
   saveData();
@@ -2679,6 +2846,9 @@ function deleteFreeLog(dateKey, itemId) {
 
 function renderFreeHistory() {
   const st = freeState();
+  const ex = CUR();
+  const exName = escHtml(ex.short || ex.name);
+  const noWeight = !!ex.noWeight;
   const c = document.getElementById('history-free');
   const workoutDays = Object.keys(st.logs).filter(freeIsWorkoutDay);
   const streak = calcFreeStreak();
@@ -2692,7 +2862,7 @@ function renderFreeHistory() {
 
   // 주간 요약
   const start = getWeekStart();
-  let wDays = 0, wSets = 0, wVol = 0;
+  let wDays = 0, wSets = 0, wVol = 0, wReps = 0;
   workoutDays.forEach(k => {
     if (new Date(k + 'T00:00:00') < start) return;
     wDays++;
@@ -2700,13 +2870,21 @@ function renderFreeHistory() {
       const sets = e.sets.filter(freeSetValid);
       wSets += sets.length;
       wVol += freeEntryVolume(e);
+      wReps += sets.reduce((a, s) => a + (parseFloat(s.r) || 0), 0);
     });
   });
   wVol = Math.round(wVol * 10) / 10;
+  // 무게 없는 운동(스트레칭)은 볼륨(kg)이 늘 0이라 총 시간/횟수를 대신 보여준다
+  const wThird = noWeight
+    ? { num: Math.round(wReps), label: '총 ' + (st.items.every(it => it.unit === '초') ? '시간(초)' : '횟수') }
+    : { num: wVol, label: '총 볼륨(kg)' };
 
   // 차트: 종목 선택 (기본 = 기록이 있는 첫 종목)
   if (!loggedIds.includes(freeChartItem)) freeChartItem = loggedIds[0] || 0;
-  const metric = FREE_METRICS.find(m => m.key === freeChartMetric) || FREE_METRICS[0];
+  // 무게 없는 운동은 무게 기반 지표(최고 무게·볼륨)를 숨긴다 — 값이 늘 0이라 의미가 없음
+  const metrics = noWeight ? FREE_METRICS.filter(m => m.key === 'bestr' || m.key === 'reps') : FREE_METRICS;
+  if (!metrics.some(m => m.key === freeChartMetric)) freeChartMetric = metrics[0].key;
+  const metric = metrics.find(m => m.key === freeChartMetric) || metrics[0];
   const metricUnit = (freeChartMetric === 'best' || freeChartMetric === 'volume')
     ? 'kg' : (loggedUnits[freeChartItem] || '회');
   const points = Object.keys(st.logs).sort().map(k => {
@@ -2720,7 +2898,7 @@ function renderFreeHistory() {
     <select class="chart-stage-select" onchange="setFreeChartItem(this.value)">
       ${loggedIds.map(id => `<option value="${id}" ${id === freeChartItem ? 'selected' : ''}>${escHtml(loggedNames[id])}</option>`).join('')}
     </select>` : '';
-  const metricChips = FREE_METRICS.map(m =>
+  const metricChips = metrics.map(m =>
     `<div class="metric-chip ${freeChartMetric === m.key ? 'active' : ''}" onclick="setFreeChartMetric('${m.key}')">${m.label}</div>`
   ).join('');
 
@@ -2772,7 +2950,7 @@ function renderFreeHistory() {
             </div>`;
         }).join('')}
       </div>`;
-  }).join('') || `<div class="empty-state">아직 덤벨 기록이 없어요<br>오늘 운동을 시작해보세요 🏋️</div>`;
+  }).join('') || `<div class="empty-state">아직 ${exName} 기록이 없어요<br>오늘 운동을 시작해보세요 ${ex.icon}</div>`;
 
   c.innerHTML = `
     <div class="week-card">
@@ -2780,13 +2958,13 @@ function renderFreeHistory() {
       <div class="week-stats">
         <div class="week-stat"><div class="week-stat-num">${wDays}</div><div class="week-stat-label">운동일</div></div>
         <div class="week-stat"><div class="week-stat-num">${wSets}</div><div class="week-stat-label">총 세트</div></div>
-        <div class="week-stat"><div class="week-stat-num">${wVol}</div><div class="week-stat-label">총 볼륨(kg)</div></div>
+        <div class="week-stat"><div class="week-stat-num">${wThird.num}</div><div class="week-stat-label">${wThird.label}</div></div>
       </div>
     </div>
     <div class="streak-bar">
       <div class="streak-num">${streak}</div>
       <div class="streak-info">
-        <div class="streak-title">일 연속 덤벨 🔥</div>
+        <div class="streak-title">일 연속 ${exName} 🔥</div>
         <div class="streak-sub">총 ${workoutDays.length}일 운동했어요</div>
       </div>
     </div>
@@ -2796,7 +2974,7 @@ function renderFreeHistory() {
       <div class="chart-wrap">${trendChartSvg(points, metricUnit, cardW)}</div>
     </div>
     <div class="cal-section">
-      <div class="cal-label">이번 달 덤벨 현황</div>
+      <div class="cal-label">이번 달 ${exName} 현황</div>
       ${calHtml}
     </div>
     <div class="section-divider">전체 기록</div>
