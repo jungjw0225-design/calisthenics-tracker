@@ -1174,6 +1174,98 @@ window.startFresh = () => {
   normalizeData();
   isDemo = false;
 };
+
+// ── 클라우드 병합 ──
+// 통째로 한쪽을 채택하면(last-write-wins) 폰에서 기록한 날과 PC에서 기록한 날이 서로를 덮어써서
+// 한쪽 기록이 통째로 사라진다. 로그가 이미 날짜 키로 나뉘어 있으므로 날짜 단위로 합친다.
+//  · 한쪽에만 있는 날짜 → 그대로 살린다
+//  · 양쪽에 있는 날짜   → 종목별로 합치고, 같은 종목이 겹치면 '더 알찬(세트가 많은)' 쪽을 남긴다
+//  · 설정값처럼 합칠 수 없는 값(현재 단계·레벨·종목 목록)은 updatedAt이 최신인 기기 쪽을 따른다
+
+// 기록의 '알참' 정도 — 세트 수가 1순위, 휴식일 표시와 메모는 동점일 때의 보조 지표
+function mgWeight(e) {
+  if (!e) return -1;
+  const sets = Array.isArray(e.sets) ? e.sets : [];
+  const filled = sets.filter(s => s && ((parseFloat(s.value) || 0) > 0 || (parseFloat(s.r) || 0) > 0)).length;
+  return filled * 100 + (e.rest ? 50 : 0) + (e.memo ? 1 : 0);
+}
+// 날짜별 로그 병합. 플란체/덤벨/스트레칭은 날짜당 배열(종목별 항목), 풀업은 날짜당 객체 1개.
+function mgMergeLogs(a, b, idKey) {
+  const out = {};
+  new Set([...Object.keys(a || {}), ...Object.keys(b || {})]).forEach(k => {
+    const av = (a || {})[k], bv = (b || {})[k];
+    if (!av || !bv) { out[k] = av || bv; return; }
+    if (Array.isArray(av) && Array.isArray(bv)) {
+      const byId = {};
+      av.forEach(e => { byId[e[idKey]] = e; });
+      bv.forEach(e => {
+        const cur = byId[e[idKey]];
+        if (!cur || mgWeight(e) > mgWeight(cur)) byId[e[idKey]] = e;
+      });
+      out[k] = Object.values(byId);
+    } else {
+      out[k] = mgWeight(bv) > mgWeight(av) ? bv : av;
+    }
+  });
+  return out;
+}
+// 종목 목록: 최신 기기 쪽을 그대로 쓰되, 그 기기가 모르는 종목(다른 기기에서 추가)은 살린다.
+// 최신 쪽을 통째로 채택해야 '사진 삭제'가 제대로 전파된다(실시간 동기화가 있으니 stale 위험은 작다).
+function mgMergeItems(mine, theirs, mineNewer) {
+  const older = (mineNewer ? theirs : mine) || [];
+  const newer = (mineNewer ? mine : theirs) || [];
+  const byId = {};
+  older.forEach(it => { byId[it.id] = it; });
+  newer.forEach(it => { byId[it.id] = it; });
+  return Object.values(byId).sort((x, y) => x.id - y.id);
+}
+window.mergeAppData = (local, remote) => {
+  if (!remote || !remote.exercises) return local;
+  const lt = local.updatedAt || 0, rt = remote.updatedAt || 0;
+  const localNewer = lt >= rt;
+  const newer = localNewer ? local : remote, older = localNewer ? remote : local;
+  const out = {
+    currentExercise: newer.currentExercise || older.currentExercise || 'planche',
+    settings: { ...(older.settings || {}), ...(newer.settings || {}) },
+    exercises: {},
+    updatedAt: Math.max(lt, rt)
+  };
+  new Set([...Object.keys(local.exercises || {}), ...Object.keys(remote.exercises || {})]).forEach(id => {
+    const a = (local.exercises || {})[id], b = (remote.exercises || {})[id];
+    if (!a || !b) { out.exercises[id] = a || b; return; }
+    const m = { ...(localNewer ? b : a), ...(localNewer ? a : b) };  // 스칼라 설정은 최신 기기 우선
+    m.logs = mgMergeLogs(a.logs, b.logs, id === 'planche' ? 'stageId' : 'itemId');
+    if (a.items || b.items) {
+      m.items = mgMergeItems(a.items, b.items, localNewer);
+      // 병합으로 id가 늘어날 수 있으므로 nextId는 항상 최대 id 다음으로 맞춘다
+      m.nextId = Math.max(a.nextId || 0, b.nextId || 0,
+        m.items.reduce((mx, it) => Math.max(mx, it.id), 0) + 1);
+    }
+    if (a.milestones || b.milestones) {
+      m.milestones = Array.from(new Set([...(a.milestones || []), ...(b.milestones || [])]));
+    }
+    out.exercises[id] = m;
+  });
+  return out;
+};
+// 키 순서와 무관하게 내용만 비교 (병합 결과가 실제로 달라졌을 때만 화면을 다시 그리기 위함)
+function mgStable(v) {
+  if (Array.isArray(v)) return '[' + v.map(mgStable).join(',') + ']';
+  if (v && typeof v === 'object') {
+    return '{' + Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + mgStable(v[k])).join(',') + '}';
+  }
+  return JSON.stringify(v === undefined ? null : v);
+}
+// updatedAt은 저장할 때마다 바뀌므로 비교에서 뺀다. 넣어두면 내용이 같아도 계속 '달라졌다'가 되어
+// 두 기기가 타임스탬프만 주고받으며 무한히 서로를 갱신한다.
+window.sameContent = (a, b) => mgStable({ ...a, updatedAt: 0 }) === mgStable({ ...b, updatedAt: 0 });
+window.sameAsAppData = (other) => window.sameContent(other, data);
+// 입력 중(키보드 올라온 상태)에는 화면을 다시 그리지 않는다 — 타이핑하던 값이 날아가므로
+window.isEditing = () => {
+  const el = document.activeElement;
+  return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA');
+};
+
 let chartMetric = 'best';
 let saveTimer = null, toastTimer = null;
 const timers = {};
@@ -3044,7 +3136,7 @@ setInterval(autoClearDayClose, 30000);
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
     from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-  import { getDatabase, ref, get, set, serverTimestamp }
+  import { getDatabase, ref, onValue, set, serverTimestamp }
     from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
   // ▼▼▼ 여기를 Firebase 콘솔 > 프로젝트 설정 > 내 앱 의 config로 교체 ▼▼▼
@@ -3071,7 +3163,9 @@ setInterval(autoClearDayClose, 30000);
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getDatabase(app);
-    let uid = null, saveTimer = null;
+    let uid = null, saveTimer = null, unsubscribe = null, pendingRender = false;
+    // 이 브라우저 탭의 식별자. 내가 올린 변경이 구독으로 되돌아왔을 때 무시하는 데 쓴다(에코 방지).
+    const CLIENT_ID = Math.random().toString(36).slice(2) + Date.now().toString(36);
 
     window.cloudSignIn = () =>
       signInWithPopup(auth, new GoogleAuthProvider()).catch(e => alert('로그인 실패: ' + e.message));
@@ -3086,7 +3180,7 @@ setInterval(autoClearDayClose, 30000);
           const d = window.getAppData();
           d.updatedAt = Date.now();
           await set(ref(db, 'users/' + uid),
-            { blob: JSON.stringify(d), updatedAt: serverTimestamp() });
+            { blob: JSON.stringify(d), writer: CLIENT_ID, updatedAt: serverTimestamp() });
           statusEl.textContent = '☁ 동기화됨 · ' + (auth.currentUser?.email || '');
         } catch (e) { console.warn('cloud save 실패', e); }
       }, 800);
@@ -3112,53 +3206,93 @@ setInterval(autoClearDayClose, 30000);
       window.syncDayEndSelect();
     };
 
-    onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        uid = user.uid;
-        btnEl.textContent = '로그아웃';
-        btnEl.setAttribute('onclick', 'cloudSignOut()');
-        statusEl.textContent = '☁ ' + (user.email || '로그인됨');
-        try {
-          const snap = await get(ref(db, 'users/' + uid));
-          const cloudData = (snap.exists() && snap.val().blob) ? JSON.parse(snap.val().blob) : null;
-          const localDemo = window.isDemoActive();
-          if (cloudData) {
-            if (localDemo) {
-              // 로컬은 데모뿐 → 클라우드 채택
-              applyCloud(cloudData);
-              window.showToast('클라우드에서 불러옴 ☁');
-            } else {
-              // 둘 다 실데이터 → 최신 타임스탬프 우선 (로컬 최신본 보호)
-              const cloudT = cloudData.updatedAt || 0;
-              const localT = window.getAppData().updatedAt || 0;
-              if (cloudT >= localT) {
-                applyCloud(cloudData);
-                window.showToast('클라우드에서 불러옴 ☁');
-              } else {
-                window.cloudSave();
-                window.showToast('로컬이 최신 → 클라우드 갱신 ☁');
-              }
-            }
-          } else {
-            // 클라우드 최초(빈 문서)
-            if (localDemo) {
-              // 데모를 올리지 않고 빈 계정으로 시작
-              window.startFresh();
-              renderFresh();
-              window.cloudSave();
-              window.showToast('새 계정으로 시작 ☁');
-            } else {
-              window.cloudSave();
-              window.showToast('클라우드 동기화 시작 ☁');
-            }
-          }
-        } catch (e) { console.warn('cloud load 실패', e); }
+    // 로그인 직후 1회: 로컬과 클라우드를 병합해서 양쪽 기록을 모두 살린다
+    const onFirstSnapshot = (cloudData) => {
+      const localDemo = window.isDemoActive();
+      if (cloudData) {
+        if (localDemo) {
+          // 로컬은 데모뿐 → 클라우드 채택
+          applyCloud(cloudData);
+          window.showToast('클라우드에서 불러옴 ☁');
+        } else {
+          // 둘 다 실데이터 → 날짜 단위로 병합 (예전처럼 한쪽을 통째로 버리지 않는다)
+          const merged = window.mergeAppData(window.getAppData(), cloudData);
+          applyCloud(merged);
+          window.cloudSave();   // 병합 결과를 클라우드에도 올려 두 기기를 같은 상태로 맞춘다
+          window.showToast('클라우드와 합쳤어요 ☁');
+        }
+      } else if (localDemo) {
+        // 클라우드 최초(빈 문서) — 데모를 올리지 않고 빈 계정으로 시작
+        window.startFresh();
+        renderFresh();
+        window.cloudSave();
+        window.showToast('새 계정으로 시작 ☁');
       } else {
+        window.cloudSave();
+        window.showToast('클라우드 동기화 시작 ☁');
+      }
+    };
+
+    // 이후: 다른 기기가 저장할 때마다 실시간으로 들어온다
+    const onRemoteChange = (cloudData) => {
+      const merged = window.mergeAppData(window.getAppData(), cloudData);
+      // 병합 결과가 클라우드에 없는 내용을 담고 있으면(이 기기에만 있던 기록) 올려서 양쪽을 맞춘다.
+      // 내용이 같아졌을 때 멈추므로 두 기기가 무한히 서로를 갱신하지 않는다.
+      const needsPush = !window.sameContent(merged, cloudData);
+      if (window.sameAsAppData(merged)) {            // 화면에 반영할 변화가 없음
+        if (needsPush) window.cloudSave();
+        return;
+      }
+      if (window.isEditing()) {
+        // 입력 중에 다시 그리면 타이핑하던 값이 날아간다 → 데이터만 반영하고 렌더는 미룬다
+        window.setAppData(merged);
+        pendingRender = true;
+      } else {
+        applyCloud(merged);
+        window.showToast('다른 기기 변경 반영됨 ☁');
+      }
+      if (needsPush) window.cloudSave();
+    };
+    // 입력이 끝나면 미뤄둔 렌더를 처리
+    document.addEventListener('focusout', () => {
+      if (!pendingRender) return;
+      setTimeout(() => {
+        if (!pendingRender || window.isEditing()) return;
+        pendingRender = false;
+        applyCloud(window.getAppData());
+        window.showToast('다른 기기 변경 반영됨 ☁');
+      }, 150);
+    });
+
+    onAuthStateChanged(auth, (user) => {
+      if (unsubscribe) { unsubscribe(); unsubscribe = null; }   // 계정 전환 시 이전 구독 정리
+      if (!user) {
         uid = null;
         btnEl.textContent = 'Google 로그인';
         btnEl.setAttribute('onclick', 'cloudSignIn()');
         statusEl.textContent = '☁ 로컬 저장 중';
+        return;
       }
+      uid = user.uid;
+      btnEl.textContent = '로그아웃';
+      btnEl.setAttribute('onclick', 'cloudSignOut()');
+      statusEl.textContent = '☁ ' + (user.email || '로그인됨');
+
+      // get()(1회 읽기) 대신 onValue(구독) — 다른 기기의 저장이 실시간으로 들어온다
+      let first = true;
+      unsubscribe = onValue(ref(db, 'users/' + uid), (snap) => {
+        let cloudData = null;
+        const val = snap.exists() ? snap.val() : null;
+        if (val && val.blob) {
+          try { cloudData = JSON.parse(val.blob); } catch (e) { console.warn('cloud blob 파손', e); return; }
+        }
+        if (first) { first = false; onFirstSnapshot(cloudData); return; }
+        if (!cloudData || val.writer === CLIENT_ID) return;   // 내가 올린 것이 돌아온 것 → 무시
+        onRemoteChange(cloudData);
+      }, (e) => {
+        console.warn('cloud 구독 실패', e);
+        statusEl.textContent = '☁ 동기화 오류 — 로컬 저장 중';
+      });
     });
   }
   if ('serviceWorker' in navigator) {
